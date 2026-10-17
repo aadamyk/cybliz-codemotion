@@ -1,0 +1,4540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cybliz CYL — Code Typer</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Fira+Code:wght@300;400;500;600;700&family=Source+Code+Pro:ital,wght@0,300;0,400;0,600;1,400&family=Inconsolata:wght@300;400;600;700&family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,600;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+
+/* ════════════════════════════════════════════════════════
+   DESIGN TOKENS — default: GitHub Dark
+   ════════════════════════════════════════════════════════ */
+:root {
+  --bg-primary:     #0d1117;
+  --bg-secondary:   #161b22;
+  --bg-tertiary:    #1c2128;
+  --bg-editor:      #0d1117;
+  --bg-tab:         #1c2128;
+  --bg-tab-active:  #0d1117;
+  --border:         #30363d;
+  --border-light:   #21262d;
+  --accent:         #58a6ff;
+  --accent2:        #3fb950;
+  --accent3:        #f78166;
+  --text-primary:   #e6edf3;
+  --text-secondary: #8b949e;
+  --text-dim:       #484f58;
+  --cursor-color:   #58a6ff;
+  --preview-bg:     #ffffff;
+  --code-bg:        #0d1117;
+  --code-text:      #e6edf3;
+  --line-num:       #484f58;
+  --html-color:     #f97583;
+  --css-color:      #79b8ff;
+  --js-color:       #ffea7f;
+  --topbar-h:       48px;
+  --tabbar-h:       36px;
+  --bottombar-h:    26px;
+}
+
+/* ════════════════════════════════════════════════════════
+   RESET & BASE
+   ════════════════════════════════════════════════════════ */
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'JetBrains Mono', monospace;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--text-dim); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+/* ════════════════════════════════════════════════════════
+   TOP BAR — primary row (always visible)
+   Desktop: logo | username | [sep] | prompt | ▶ Start | ⚙
+   Mobile:  logo | prompt | ▶ | ⚙
+   ════════════════════════════════════════════════════════ */
+#topbar {
+  height: var(--topbar-h);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 8px;
+  flex-shrink: 0;
+  user-select: none;
+  /* No overflow — items are intentionally fitted */
+}
+
+/* Secondary bar — timer + phase + pause + reset
+   Hidden at idle, shown as a slim sub-bar when animation runs */
+#topbar-secondary {
+  display: none;
+  height: 34px;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-light);
+  align-items: center;
+  padding: 0 12px;
+  gap: 8px;
+  flex-shrink: 0;
+  user-select: none;
+}
+#topbar-secondary.visible { display: flex; }
+
+/* Logo */
+#logo-space {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: 10px;
+  color: #0d1117;
+  cursor: pointer;
+  flex-shrink: 0;
+  overflow: hidden;
+  border: 2px solid transparent;
+  transition: border-color 0.15s;
+}
+#logo-space:hover { border-color: var(--accent); }
+#logo-space img { width: 100%; height: 100%; object-fit: cover; }
+
+/* Username */
+#username-input {
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--accent);
+  width: 120px;
+  flex-shrink: 0;
+  min-width: 0;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.12s;
+}
+#username-input:focus { border-bottom-color: var(--accent); }
+
+/* Separator — pushes prompt + buttons to the right */
+.topbar-sep { flex: 1; min-width: 4px; }
+
+/* Phase display — lives in secondary bar */
+#phase-display {
+  font-size: 10px;
+  color: var(--accent);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 3px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+}
+
+/* Timer — lives in secondary bar */
+#timer-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+#timer-input {
+  width: 46px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-align: center;
+  padding: 3px 4px;
+  outline: none;
+  transition: border-color 0.12s;
+}
+#timer-input:focus { border-color: var(--accent); }
+
+/* Prompt — expands to fill available space in primary bar */
+#prompt-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  flex: 1;
+  min-width: 0;
+  max-width: 340px;
+  cursor: pointer;
+  transition: border-color 0.12s;
+  overflow: hidden;
+}
+#prompt-wrap:hover { border-color: var(--accent); }
+
+#prompt-label {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-secondary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  width: 100%;
+  cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  min-width: 0;
+}
+
+/* Buttons — shared styles */
+.btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 13px;
+  border-radius: 5px;
+  border: none;
+  cursor: pointer;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  transition: all 0.14s;
+  flex-shrink: 0;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.btn-start { background: var(--accent2); color: #0d1117; }
+.btn-start:hover:not(:disabled) {
+  background: #56d364;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(63,185,80,0.3);
+}
+.btn-start:disabled { background: var(--text-dim); color: var(--text-secondary); cursor: not-allowed; }
+
+.btn-pause { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border); }
+.btn-pause:hover:not(:disabled) { background: var(--bg-tab); }
+.btn-pause:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btn-reset { background: var(--bg-tertiary); color: var(--accent3); border: 1px solid var(--border); }
+.btn-reset:hover { background: var(--bg-tab); }
+
+/* ════════════════════════════════════════════════════════
+   RESPONSIVE — MOBILE  ≤ 640px
+   ════════════════════════════════════════════════════════ */
+@media (max-width: 640px) {
+
+  :root {
+    --topbar-h:      52px;
+    --tabbar-h:      40px;
+    --bottombar-h:   32px;
+  }
+
+  /* Primary bar: logo | prompt (flex-1) | ▶ | ⚙ */
+  #topbar { padding: 0 10px; gap: 8px; }
+
+  /* Hide username — no room on mobile */
+  #username-input { display: none; }
+
+  /* Prompt fills all remaining space */
+  #prompt-wrap { max-width: none; flex: 1; }
+
+  /* Start — icon only: hide text label */
+  #btn-start .btn-label { display: none; }
+  #btn-start { padding: 8px 13px; font-size: 14px; letter-spacing: 0; }
+
+  /* Settings — bigger tap target, icon only */
+  #btn-settings { padding: 8px 12px; font-size: 15px; }
+
+  /* Secondary bar — tighter on mobile */
+  #topbar-secondary { padding: 0 10px; gap: 6px; }
+  #topbar-secondary #phase-display { font-size: 9px; padding: 2px 6px; min-width: 0; }
+  #topbar-secondary .btn { padding: 3px 9px; font-size: 11px; }
+  #topbar-secondary #timer-wrap { font-size: 11px; }
+
+  /* Tab bar */
+  #tabs-bar { height: var(--tabbar-h); }
+  .tab { min-width: 76px; padding: 0 10px; font-size: 11px; }
+
+  /* Editor */
+  #code-display { font-size: 11.5px; }
+  #line-numbers { font-size: 10px; min-width: 36px; padding: 10px 8px 10px 4px; }
+  #code-scroll  { padding: 10px 10px 60px 10px; }
+
+  /* Preview pane */
+  #preview-pane { height: 40% !important; }
+
+  /* Never side-by-side on mobile */
+  #split-container.horizontal { flex-direction: column !important; }
+  #split-container.horizontal #preview-pane {
+    width: 100% !important;
+    height: 40% !important;
+    border-right: none !important;
+    border-bottom: 1px solid var(--border) !important;
+  }
+  #split-container.horizontal #drag-divider {
+    width: 100% !important;
+    height: 5px !important;
+    cursor: row-resize !important;
+  }
+
+  /* Settings panel full width */
+  #settings-panel { width: 100vw; }
+
+  /* Bottom bar */
+  #bottombar { padding: 0 10px; gap: 8px; height: var(--bottombar-h); }
+  #progress-bar-wrap { max-width: 90px; }
+  #char-counter { display: none; }
+  #aspect-toggle { display: none; }
+
+  /* Drag divider bigger tap target */
+  #drag-divider { height: 8px; }
+
+  /* Modal slides up from bottom as a sheet */
+  .modal-box {
+    width: 100vw;
+    max-height: 92vh;
+    border-radius: 14px 14px 0 0;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+  }
+  #paste-modal { align-items: flex-end; }
+}
+
+/* Tablet — 641px to 900px */
+@media (min-width: 641px) and (max-width: 900px) {
+  #username-input { width: 90px; font-size: 12px; }
+  #prompt-wrap    { max-width: 200px; }
+  #settings-panel { width: 280px; }
+  .tab            { min-width: 100px; }
+}
+
+/* ════════════════════════════════════════════════════════
+   MAIN LAYOUT
+   ════════════════════════════════════════════════════════ */
+#main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+/* ── SPLIT CONTAINER ── */
+#split-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* Side-by-side mode (16:9 / YouTube) */
+#split-container.horizontal {
+  flex-direction: row;
+}
+
+/* ════════════════════════════════════════════════════════
+   PREVIEW PANE
+   ════════════════════════════════════════════════════════ */
+#preview-pane {
+  flex-shrink: 0;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  height: 40%;
+  transition: height 0.1s;
+}
+
+#split-container.horizontal #preview-pane {
+  width: 50%;
+  height: 100% !important;
+  border-bottom: none;
+  border-right: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.pane-header {
+  height: 28px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border);
+  font-size: 10px;
+  color: var(--text-secondary);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent2);
+  flex-shrink: 0;
+}
+
+#preview-status-text {
+  margin-left: auto;
+  font-size: 9px;
+  color: var(--text-dim);
+}
+
+#preview-iframe {
+  flex: 1;
+  border: none;
+  background: var(--preview-bg);
+  width: 100%;
+  display: block;
+}
+
+/* JS error overlay rendered inside iframe, HTML error shown here */
+#preview-error-bar {
+  display: none;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #2d1b1b;
+  border-top: 1px solid var(--accent3);
+  color: var(--accent3);
+  padding: 5px 12px;
+  font-size: 10px;
+  line-height: 1.5;
+  max-height: 70px;
+  overflow-y: auto;
+}
+
+/* Preview complete pulse */
+@keyframes completePulse {
+  0%   { box-shadow: inset 0 0 0 2px transparent; }
+  50%  { box-shadow: inset 0 0 0 2px var(--accent2); }
+  100% { box-shadow: inset 0 0 0 2px transparent; }
+}
+
+.complete-pulse { animation: completePulse 0.7s ease-out; }
+
+/* ════════════════════════════════════════════════════════
+   DRAG DIVIDER
+   ════════════════════════════════════════════════════════ */
+#drag-divider {
+  height: 5px;
+  background: var(--border);
+  cursor: row-resize;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s;
+  position: relative;
+  z-index: 10;
+}
+
+#drag-divider:hover,
+#drag-divider.dragging {
+  background: var(--accent);
+  opacity: 0.6;
+}
+
+#drag-divider::after {
+  content: '';
+  width: 36px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--text-dim);
+}
+
+#split-container.horizontal #drag-divider {
+  width: 5px;
+  height: 100%;
+  cursor: col-resize;
+  flex-direction: column;
+}
+
+#split-container.horizontal #drag-divider::after {
+  width: 2px;
+  height: 36px;
+}
+
+/* ════════════════════════════════════════════════════════
+   EDITOR PANE
+   ════════════════════════════════════════════════════════ */
+#editor-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+  position: relative;
+}
+
+/* ── TABS BAR ── */
+#tabs-bar {
+  height: var(--tabbar-h);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: stretch;
+  flex-shrink: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+#tabs-bar::-webkit-scrollbar { display: none; }
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 14px;
+  cursor: pointer;
+  border-right: 1px solid var(--border-light);
+  font-size: 11px;
+  color: var(--text-secondary);
+  transition: all 0.12s;
+  position: relative;
+  flex-shrink: 0;
+  min-width: 120px;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.tab:hover {
+  background: var(--bg-tab);
+  color: var(--text-primary);
+}
+
+.tab.active {
+  background: var(--bg-tab-active);
+  color: var(--text-primary);
+  border-top: 2px solid var(--accent);
+  margin-top: -1px; /* compensate for border */
+}
+
+.tab.active.tab-html { border-top-color: var(--html-color); }
+.tab.active.tab-css  { border-top-color: var(--css-color); }
+.tab.active.tab-js   { border-top-color: var(--js-color); }
+
+/* Colored dot per language */
+.tab-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.tab-html .tab-dot { background: var(--html-color); }
+.tab-css  .tab-dot { background: var(--css-color); }
+.tab-js   .tab-dot { background: var(--js-color); }
+
+/* Tab close button */
+.tab-close-btn {
+  margin-left: auto;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: var(--text-dim);
+  transition: all 0.1s;
+  flex-shrink: 0;
+}
+
+.tab-close-btn:hover {
+  background: rgba(247,129,102,0.2);
+  color: var(--accent3);
+}
+
+/* Add tab button */
+.tab-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  cursor: pointer;
+  color: var(--text-dim);
+  font-size: 16px;
+  font-weight: 300;
+  transition: all 0.12s;
+  flex-shrink: 0;
+}
+
+.tab-add-btn:hover {
+  color: var(--accent);
+  background: var(--bg-tab);
+}
+
+/* ── EDITOR BODY ── */
+#editor-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;        /* outer container does NOT scroll */
+  background: var(--code-bg);
+  min-height: 0;
+}
+
+/* Line numbers — sits inside code-scroll as a sticky left column,
+   scrolls naturally with the code content */
+#line-numbers {
+  position: sticky;
+  left: 0;
+  top: 0;
+  padding: 12px 14px 12px 8px;
+  min-width: 50px;
+  text-align: right;
+  color: var(--line-num);
+  font-size: 12px;
+  line-height: 1.6;
+  background: var(--code-bg);
+  user-select: none;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border-light);
+  pointer-events: none;
+  /* No overflow — grows with content naturally inside the shared scroll */
+  align-self: flex-start;
+}
+
+.line-num-item {
+  height: 19.2px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* Code scroll area — the ONLY scrolling element.
+   Line numbers live inside here so they scroll together. */
+#code-scroll {
+  flex: 1;
+  overflow: auto;
+  position: relative;
+  display: flex;            /* side by side: line-numbers | code-display */
+  align-items: flex-start;
+  background: var(--code-bg);
+}
+
+/* Code display — flex child inside code-scroll, sits right of line numbers */
+#code-display {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  /* FIXED: break-all was cutting code mid-word/mid-tag which looks terrible.
+     overflow-wrap: break-word only breaks when a single token is wider than
+     the container — all normal code wraps cleanly at spaces and operators. */
+  word-break: normal;
+  overflow-wrap: break-word;
+  min-height: 100%;
+  flex: 1;
+  outline: none;
+  caret-color: var(--cursor-color);
+  color: var(--code-text);
+  tab-size: 2;
+  padding: 12px 20px 80px 16px;
+}
+
+/* Boilerplate dimming */
+.boilerplate-section { opacity: 0.38; }
+
+/* ── TYPING CURSOR ── */
+.typing-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: var(--cursor-color);
+  vertical-align: text-bottom;
+  position: relative;
+  top: 1px;
+  margin-left: 0;
+  box-shadow: 0 0 8px var(--cursor-color), 0 0 16px var(--cursor-color);
+}
+
+/* Idle cursor blinks gently */
+.typing-cursor.idle {
+  animation: idleBlink 1.4s ease-in-out infinite;
+}
+
+@keyframes idleBlink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.15; }
+}
+
+/* ── SYNTAX HIGHLIGHTING — Colors applied via theme ── */
+/* HTML */
+.hl-tag      { color: var(--html-color); }
+.hl-attr     { color: var(--css-color); }
+.hl-val      { color: #9ecbff; }
+.hl-comment  { color: #6a737d; font-style: italic; }
+.hl-doctype  { color: #6a737d; }
+.hl-punct    { color: var(--text-secondary); }
+/* CSS */
+.hl-sel      { color: var(--html-color); }
+.hl-prop     { color: var(--css-color); }
+.hl-cssval   { color: #9ecbff; }
+/* JS */
+.hl-keyword  { color: var(--html-color); }
+.hl-string   { color: #9ecbff; }
+.hl-number   { color: var(--css-color); }
+.hl-fn       { color: #b392f0; }
+.hl-op       { color: var(--text-secondary); }
+
+/* ── TAB SWITCH OVERLAY ── */
+#switch-overlay {
+  display: none;
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.72);
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 50;
+  backdrop-filter: blur(2px);
+}
+
+#switch-overlay.show { display: flex; }
+
+.switch-text {
+  font-family: 'Syne', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.06em;
+}
+
+.switch-sub {
+  font-size: 10px;
+  color: var(--text-secondary);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* ════════════════════════════════════════════════════════
+   BOTTOM BAR
+   ════════════════════════════════════════════════════════ */
+#bottombar {
+  height: var(--bottombar-h);
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 12px;
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--text-secondary);
+  user-select: none;
+  overflow: hidden;
+}
+
+#progress-bar-wrap {
+  flex: 1;
+  max-width: 260px;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+#progress-bar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--accent2), var(--accent));
+  transition: width 0.15s linear;
+  border-radius: 2px;
+}
+
+#char-counter { color: var(--text-dim); }
+#speed-display { color: var(--accent); min-width: 50px; }
+#line-col-display { color: var(--text-dim); }
+
+.bottombar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Aspect ratio toggle buttons in bottom bar */
+#aspect-toggle { display: flex; gap: 3px; }
+
+.aspect-btn {
+  padding: 1px 7px;
+  border-radius: 3px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 9px;
+  font-family: 'JetBrains Mono', monospace;
+  transition: all 0.1s;
+}
+
+.aspect-btn:hover,
+.aspect-btn.active {
+  background: var(--accent);
+  color: #0d1117;
+  border-color: var(--accent);
+}
+
+/* ════════════════════════════════════════════════════════
+   SETTINGS PANEL (slide-in from right)
+   ════════════════════════════════════════════════════════ */
+#settings-panel {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 310px;
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  transform: translateX(100%);
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: -8px 0 30px rgba(0,0,0,0.4);
+}
+
+#settings-panel.open {
+  transform: translateX(0);
+}
+
+.settings-header {
+  padding: 14px 16px;
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  color: var(--text-primary);
+}
+
+.settings-close-btn {
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 18px;
+  line-height: 1;
+  transition: color 0.1s;
+}
+
+.settings-close-btn:hover { color: var(--accent3); }
+
+.settings-section {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-light);
+  flex-shrink: 0;
+}
+
+.settings-label {
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: 9px;
+  font-weight: 600;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+
+.settings-row label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  flex: 1;
+}
+
+/* Color picker swatch */
+.color-swatch {
+  width: 30px;
+  height: 22px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  overflow: hidden;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.color-swatch input[type="color"] {
+  position: absolute;
+  inset: -4px;
+  width: calc(100% + 8px);
+  height: calc(100% + 8px);
+  border: none;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.color-preview-chip {
+  width: 30px;
+  height: 22px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
+/* Select dropdowns */
+.settings-select {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: 4px;
+  padding: 3px 7px;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.12s;
+}
+
+.settings-select:focus { border-color: var(--accent); }
+
+/* Settings action buttons */
+.settings-btn {
+  padding: 6px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  cursor: pointer;
+  transition: all 0.1s;
+  width: 100%;
+  margin-top: 4px;
+  text-align: left;
+}
+
+.settings-btn:hover {
+  background: var(--bg-tab);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Hotkey chips */
+.key-chip {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  font-size: 9px;
+  color: var(--text-secondary);
+  margin-right: 4px;
+}
+
+/* ════════════════════════════════════════════════════════
+   PASTE / CODE INPUT MODAL
+   ════════════════════════════════════════════════════════ */
+#paste-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.72);
+  z-index: 300;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(5px);
+}
+
+#paste-modal.open { display: flex; }
+
+.modal-box {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  width: min(96vw, 660px);
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+  box-shadow: 0 24px 70px rgba(0,0,0,0.55);
+}
+
+.modal-header {
+  padding: 16px 20px;
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  color: var(--text-primary);
+}
+
+.modal-close-btn {
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 18px;
+  line-height: 1;
+  transition: color 0.1s;
+}
+
+.modal-close-btn:hover { color: var(--accent3); }
+
+.modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.modal-field { display: flex; flex-direction: column; gap: 5px; }
+
+.modal-field label {
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.modal-input,
+.modal-textarea {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  padding: 8px 10px;
+  outline: none;
+  transition: border-color 0.12s;
+  line-height: 1.5;
+}
+
+.modal-input:focus,
+.modal-textarea:focus {
+  border-color: var(--accent);
+}
+
+.modal-textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* Timer + speed row inside modal */
+.modal-time-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.modal-time-row input[type="number"] {
+  width: 72px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  padding: 6px 8px;
+  outline: none;
+  text-align: center;
+  transition: border-color 0.12s;
+}
+
+.modal-time-row input[type="number"]:focus { border-color: var(--accent); }
+
+.speed-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.1s;
+}
+
+.speed-btn:hover {
+  background: var(--bg-tab);
+  border-color: var(--accent);
+}
+
+#modal-speed-display {
+  color: var(--accent);
+  font-size: 11px;
+  min-width: 28px;
+  text-align: center;
+}
+
+.modal-footer {
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.btn-secondary {
+  padding: 7px 16px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.btn-secondary:hover { border-color: var(--accent); color: var(--text-primary); }
+
+.btn-primary {
+  padding: 7px 20px;
+  border-radius: 5px;
+  border: none;
+  background: var(--accent2);
+  color: #0d1117;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.14s;
+}
+
+.btn-primary:hover {
+  background: #56d364;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 12px rgba(63,185,80,0.3);
+}
+
+/* ════════════════════════════════════════════════════════
+   RECORD BUTTON
+   ════════════════════════════════════════════════════════ */
+.btn-record {
+  background: transparent;
+  color: #ff4444;
+  border: 1px solid #ff444466;
+  transition: all 0.14s;
+}
+.btn-record:hover {
+  background: #ff44441a;
+  border-color: #ff4444aa;
+  box-shadow: 0 0 8px #ff444433;
+}
+.btn-record.recording {
+  background: #ff4444;
+  color: #fff;
+  border-color: #ff4444;
+  animation: recBtnPulse 1.4s ease-in-out infinite;
+}
+@keyframes recBtnPulse {
+  0%, 100% { box-shadow: 0 0 0 0 #ff444455; }
+  50%       { box-shadow: 0 0 0 6px #ff444400; }
+}
+
+/* ════════════════════════════════════════════════════════
+   RECORDING INDICATOR — in topbar-secondary
+   ════════════════════════════════════════════════════════ */
+#rec-indicator {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #ff4444;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+#rec-indicator.visible { display: flex; }
+
+.rec-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff4444;
+  flex-shrink: 0;
+  animation: recDotPulse 1s ease-in-out infinite;
+}
+@keyframes recDotPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.25; transform: scale(0.8); }
+}
+
+#rec-elapsed {
+  font-family: 'JetBrains Mono', monospace;
+  min-width: 40px;
+  color: #ff4444;
+}
+
+.btn-stop-rec {
+  padding: 3px 9px;
+  border-radius: 4px;
+  border: 1px solid #ff444466;
+  background: transparent;
+  color: #ff4444;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.btn-stop-rec:hover { background: #ff44441a; border-color: #ff4444; }
+
+/* ════════════════════════════════════════════════════════
+   COUNTDOWN OVERLAY
+   ════════════════════════════════════════════════════════ */
+#countdown-overlay {
+  display: none;
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.88);
+  z-index: 500;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 14px;
+  backdrop-filter: blur(4px);
+}
+#countdown-overlay.show { display: flex; }
+
+.countdown-number {
+  font-family: 'Syne', sans-serif;
+  font-size: 110px;
+  font-weight: 900;
+  line-height: 1;
+  color: var(--accent);
+  text-shadow: 0 0 40px var(--accent), 0 0 80px var(--accent);
+  animation: countdownPop 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes countdownPop {
+  0%   { transform: scale(1.6); opacity: 0; }
+  100% { transform: scale(1);   opacity: 1; }
+}
+
+.countdown-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+/* ════════════════════════════════════════════════════════
+   SOUND ACTIVE INDICATOR — subtle icon in bottombar
+   ════════════════════════════════════════════════════════ */
+#sound-status {
+  font-size: 12px;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: color 0.12s;
+  user-select: none;
+  flex-shrink: 0;
+}
+#sound-status:hover { color: var(--accent); }
+#sound-status.on { color: var(--accent2); }
+#hotkey-toast {
+  position: fixed;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 11px;
+  color: var(--accent);
+  opacity: 0;
+  transition: all 0.2s;
+  pointer-events: none;
+  z-index: 500;
+  white-space: nowrap;
+}
+
+#hotkey-toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ════════════════════════════════════════════════════════
+   RESPONSIVE — MOBILE
+   ════════════════════════════════════════════════════════ */
+@media (max-width: 600px) {
+  .hide-mobile { display: none !important; }
+  #prompt-wrap { max-width: 160px; }
+  .tab { min-width: 90px; padding: 0 10px; }
+  #settings-panel { width: 90vw; }
+}
+
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════
+     TOP BAR
+     ════════════════════════════════════════════ -->
+<div id="topbar">
+
+  <!-- Logo -->
+  <div id="logo-space" title="Upload branding logo" onclick="document.getElementById('logo-upload').click()">
+    <span id="logo-text" style="letter-spacing:0.02em">CYL</span>
+    <img id="logo-img" src="" alt="" style="display:none">
+  </div>
+  <input type="file" id="logo-upload" accept="image/*" style="display:none">
+
+  <!-- Username (hidden on mobile via CSS) -->
+  <input
+    type="text"
+    id="username-input"
+    value="Cybliz CYL"
+    maxlength="28"
+    spellcheck="false"
+    title="Click to edit your name"
+    oninput="syncUsernameToWatermark(this.value)"
+  >
+
+  <!-- Flexible gap -->
+  <div class="topbar-sep"></div>
+
+  <!-- Prompt — click to open paste modal -->
+  <div id="prompt-wrap" onclick="openPasteModal()" title="Paste your HTML / CSS / JS (Ctrl+K)">
+    <span style="color:var(--text-dim);font-size:10px;flex-shrink:0">⌘</span>
+    <span id="prompt-label">Click to paste your code…</span>
+  </div>
+
+  <!-- Start -->
+  <button class="btn btn-start" id="btn-start" onclick="handleStartClick()" title="Start animation (Space)">
+    <span>▶</span><span class="btn-label"> Start</span>
+  </button>
+
+  <!-- Record -->
+  <button class="btn btn-record" id="btn-record" onclick="toggleRecording()" title="Record screen as video (1080p .webm)">
+    <span id="btn-record-label">⏺ Rec</span>
+  </button>
+
+  <!-- Settings -->
+  <button class="btn btn-pause" id="btn-settings" onclick="toggleSettings()" title="Settings (S)">
+    ⚙
+  </button>
+
+</div>
+
+<!-- Secondary bar: appears only when animation is running -->
+<div id="topbar-secondary">
+
+  <!-- Phase indicator -->
+  <span id="phase-display">● IDLE</span>
+
+  <!-- Spacer -->
+  <div class="topbar-sep"></div>
+
+  <!-- Timer -->
+  <div id="timer-wrap" title="Total animation time in seconds">
+    <span style="font-size:12px">⏱</span>
+    <input type="number" id="timer-input" value="30" min="5" max="3600">
+    <span>s</span>
+  </div>
+
+  <!-- Pause -->
+  <button class="btn btn-pause" id="btn-pause" onclick="togglePause()" disabled title="Pause / Resume (Space)">
+    ⏸ Pause
+  </button>
+
+  <!-- Reset -->
+  <button class="btn btn-reset" id="btn-reset" onclick="resetAll()" title="Reset (R)">
+    ↺ Reset
+  </button>
+
+  <!-- Recording indicator — shown only while recording -->
+  <div id="rec-indicator">
+    <div class="rec-dot"></div>
+    <span>REC</span>
+    <span id="rec-elapsed">00:00</span>
+    <button class="btn-stop-rec" onclick="stopRecording()" title="Stop recording and save">■ Stop</button>
+  </div>
+
+</div>
+
+<!-- ════════════════════════════════════════════
+     MAIN AREA
+     ════════════════════════════════════════════ -->
+<div id="main">
+  <!-- Countdown overlay — sits over everything, shown before animation -->
+  <div id="countdown-overlay">
+    <div class="countdown-number" id="countdown-number">3</div>
+    <div class="countdown-label">Get ready…</div>
+  </div>
+
+  <div id="split-container">
+
+    <!-- ── PREVIEW PANE ── -->
+    <div id="preview-pane">
+      <div class="pane-header">
+        <div class="status-dot" id="preview-dot"></div>
+        <span>LIVE PREVIEW</span>
+        <span id="preview-status-text">Ready</span>
+      </div>
+      <!-- Sandbox: allow-scripts so JS runs; allow-same-origin so doc.write works -->
+      <iframe
+        id="preview-iframe"
+        sandbox="allow-scripts allow-same-origin"
+        title="Live Preview"
+      ></iframe>
+      <div id="preview-error-bar"></div>
+      <!-- Watermark overlay on the preview -->
+      <div id="preview-watermark" style="
+        position:absolute; bottom:8px; right:10px;
+        font-family:'Syne',sans-serif; font-weight:700;
+        font-size:11px; letter-spacing:0.1em;
+        color:var(--accent); opacity:0.35;
+        pointer-events:none; user-select:none;
+        text-shadow: 0 0 8px var(--accent);
+      ">Cybliz CYL</div>
+    </div>
+
+    <!-- ── DRAG DIVIDER ── -->
+    <div id="drag-divider" title="Drag to resize"></div>
+
+    <!-- ── EDITOR PANE ── -->
+    <div id="editor-pane">
+
+      <!-- Tab bar -->
+      <div id="tabs-bar">
+        <!-- Tabs injected by JS -->
+        <!-- Add tab button always at end, shown only when tabs < 3 -->
+        <div class="tab-add-btn" id="tab-add-btn" onclick="addRemovedTab()" title="Add back removed tab" style="display:none">
+          +
+        </div>
+      </div>
+
+      <!-- Editor body: single scroll container with line numbers + code side by side -->
+      <div id="editor-body">
+        <div id="code-scroll">
+          <!-- Line numbers sit inside the scroll container so they scroll with the code -->
+          <div id="line-numbers"></div>
+          <div
+            id="code-display"
+            contenteditable="true"
+            spellcheck="false"
+            onkeydown="onEditorKeyDown(event)"
+            oninput="onEditorInput()"
+            onpaste="onEditorPaste(event)"
+            onfocus="onEditorFocus()"
+          ></div>
+        </div>
+      </div>
+
+      <!-- Tab switch overlay -->
+      <div id="switch-overlay">
+        <div class="switch-text" id="switch-text">Switching to CSS…</div>
+        <div class="switch-sub">1 second</div>
+      </div>
+
+    </div><!-- end editor-pane -->
+
+  </div><!-- end split-container -->
+
+  <!-- ── SETTINGS PANEL ── -->
+  <div id="settings-panel">
+    <div class="settings-header">
+      <span>⚙ Settings</span>
+      <span class="settings-close-btn" onclick="toggleSettings()">✕</span>
+    </div>
+
+    <!-- ══ THEME PRESETS ══ -->
+    <div class="settings-section">
+      <div class="settings-label">Theme Presets</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+        <button class="settings-btn" onclick="applyTheme('github-dark')">GitHub Dark</button>
+        <button class="settings-btn" onclick="applyTheme('cyberpunk')">Cyberpunk</button>
+        <button class="settings-btn" onclick="applyTheme('dracula')">Dracula</button>
+        <button class="settings-btn" onclick="applyTheme('monokai')">Monokai</button>
+        <button class="settings-btn" onclick="applyTheme('nord')">Nord</button>
+        <button class="settings-btn" onclick="applyTheme('one-dark')">One Dark</button>
+        <button class="settings-btn" onclick="applyTheme('abyss')">Abyss</button>
+      </div>
+    </div>
+
+    <!-- ══ CUSTOM COLORS ══ -->
+    <div class="settings-section">
+      <div class="settings-label">Editor Colors</div>
+
+      <div class="settings-row">
+        <label>Code Background</label>
+        <div style="display:flex;gap:5px;align-items:center">
+          <div class="color-swatch"><input type="color" value="#0d1117" id="color-code-bg"
+            oninput="applyCustomColor('--code-bg',this.value,'color-chip-code-bg');applyCustomColor('--bg-editor',this.value)"></div>
+          <div class="color-preview-chip" id="color-chip-code-bg" style="background:#0d1117"></div>
+        </div>
+      </div>
+
+      <div class="settings-row">
+        <label>Code Text</label>
+        <div style="display:flex;gap:5px;align-items:center">
+          <div class="color-swatch"><input type="color" value="#e6edf3" id="color-code-text"
+            oninput="applyCustomColor('--code-text',this.value,'color-chip-code-text');applyCustomColor('--text-primary',this.value)"></div>
+          <div class="color-preview-chip" id="color-chip-code-text" style="background:#e6edf3"></div>
+        </div>
+      </div>
+
+      <div class="settings-row">
+        <label>Accent &amp; Cursor Color</label>
+        <div style="display:flex;gap:5px;align-items:center">
+          <div class="color-swatch"><input type="color" value="#58a6ff" id="color-accent"
+            oninput="applyCustomColor('--accent',this.value,'color-chip-accent');applyCustomColor('--cursor-color',this.value)"></div>
+          <div class="color-preview-chip" id="color-chip-accent" style="background:#58a6ff"></div>
+        </div>
+      </div>
+
+      <div class="settings-row">
+        <label>UI Background</label>
+        <div style="display:flex;gap:5px;align-items:center">
+          <div class="color-swatch"><input type="color" value="#161b22" id="color-ui-bg"
+            oninput="applyCustomColor('--bg-secondary',this.value,'color-chip-ui-bg');applyCustomColor('--bg-tab',this.value)"></div>
+          <div class="color-preview-chip" id="color-chip-ui-bg" style="background:#161b22"></div>
+        </div>
+      </div>
+
+      <div class="settings-row">
+        <label>Line Number Color</label>
+        <div style="display:flex;gap:5px;align-items:center">
+          <div class="color-swatch"><input type="color" value="#484f58" id="color-linenum"
+            oninput="applyCustomColor('--line-num',this.value,'color-chip-linenum')"></div>
+          <div class="color-preview-chip" id="color-chip-linenum" style="background:#484f58"></div>
+        </div>
+      </div>
+
+      <div class="settings-row">
+        <label>Border Color</label>
+        <div style="display:flex;gap:5px;align-items:center">
+          <div class="color-swatch"><input type="color" value="#30363d" id="color-border"
+            oninput="applyCustomColor('--border',this.value,'color-chip-border');applyCustomColor('--border-light',this.value)"></div>
+          <div class="color-preview-chip" id="color-chip-border" style="background:#30363d"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ SYNTAX HIGHLIGHT COLORS ══ -->
+    <div class="settings-section">
+      <div class="settings-label">Syntax Highlight Colors</div>
+
+      <div class="settings-row">
+        <label>HTML Tags</label>
+        <div style="display:flex;gap:5px;align-items:center">
+          <div class="color-swatch"><input type="color" value="#f97583" id="color-html"
+            oninput="applyCustomColor('--html-color',this.value,'color-chip-html')"></div>
+          <div class="color-preview-chip" id="color-chip-html" style="background:#f97583"></div>
+        </div>
+      </div>
+
+      <div class="settings-row">
+        <label>CSS Props</label>
+        <div style="display:flex;gap:5px;align-items:center">
+          <div class="color-swatch"><input type="color" value="#79b8ff" id="color-css"
+            oninput="applyCustomColor('--css-color',this.value,'color-chip-css')"></div>
+          <div class="color-preview-chip" id="color-chip-css" style="background:#79b8ff"></div>
+        </div>
+      </div>
+
+      <div class="settings-row">
+        <label>JS Keywords</label>
+        <div style="display:flex;gap:5px;align-items:center">
+          <div class="color-swatch"><input type="color" value="#ffea7f" id="color-js"
+            oninput="applyCustomColor('--js-color',this.value,'color-chip-js')"></div>
+          <div class="color-preview-chip" id="color-chip-js" style="background:#ffea7f"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ PREVIEW COLORS ══ -->
+    <div class="settings-section">
+      <div class="settings-label">Preview</div>
+
+      <div class="settings-row">
+        <label>Preview Background</label>
+        <div style="display:flex;gap:5px;align-items:center">
+          <div class="color-swatch"><input type="color" value="#ffffff" id="color-preview-bg"
+            oninput="applyCustomColor('--preview-bg',this.value,'color-chip-preview-bg');document.getElementById('preview-iframe').style.backgroundColor=this.value"></div>
+          <div class="color-preview-chip" id="color-chip-preview-bg" style="background:#ffffff"></div>
+        </div>
+      </div>
+
+      <div class="settings-row">
+        <label>Preview Zoom</label>
+        <select class="settings-select" onchange="setPreviewZoom(this.value)">
+          <option value="1">100% — Normal</option>
+          <option value="0.75">75% — Zoomed Out</option>
+          <option value="0.5">50% — Overview</option>
+          <option value="1.25">125% — Zoomed In</option>
+          <option value="1.5">150% — Large</option>
+        </select>
+      </div>
+
+      <div class="settings-row">
+        <label>Watermark Text</label>
+        <select class="settings-select" id="watermark-mode" onchange="setWatermark(this.value)">
+          <option value="username">Use Username</option>
+          <option value="custom">Custom Text</option>
+          <option value="none">Hidden</option>
+        </select>
+      </div>
+
+      <div class="settings-row" id="watermark-custom-row" style="display:none">
+        <input type="text" class="settings-select" id="watermark-text"
+          placeholder="Your watermark text…"
+          style="width:100%;padding:4px 7px;font-size:11px"
+          oninput="updateWatermarkText(this.value)">
+      </div>
+
+      <div class="settings-row">
+        <label>Watermark Font Size</label>
+        <select class="settings-select" id="wm-font-size" onchange="updateWatermarkStyle()">
+          <option value="9px">9px — Tiny</option>
+          <option value="11px" selected>11px — Small</option>
+          <option value="14px">14px — Medium</option>
+          <option value="18px">18px — Large</option>
+          <option value="24px">24px — XL</option>
+        </select>
+      </div>
+
+      <div class="settings-row">
+        <label>Watermark Weight</label>
+        <select class="settings-select" id="wm-font-weight" onchange="updateWatermarkStyle()">
+          <option value="400">Normal</option>
+          <option value="600">Semi Bold</option>
+          <option value="700" selected>Bold</option>
+          <option value="800">Extra Bold</option>
+        </select>
+      </div>
+
+      <div class="settings-row">
+        <label>Watermark Opacity</label>
+        <select class="settings-select" id="wm-opacity" onchange="updateWatermarkStyle()">
+          <option value="0.15">15% — Very Faint</option>
+          <option value="0.30">30% — Subtle</option>
+          <option value="0.50" selected>50% — Visible</option>
+          <option value="0.75">75% — Strong</option>
+          <option value="1">100% — Full</option>
+        </select>
+      </div>
+
+      <div class="settings-row">
+        <label>Watermark Color</label>
+        <div style="display:flex;gap:5px;align-items:center">
+          <div class="color-swatch">
+            <input type="color" id="watermark-color" value="#58a6ff"
+              oninput="updateWatermarkStyle()">
+          </div>
+          <div class="color-preview-chip" id="watermark-color-chip"
+            style="background:#58a6ff;width:30px;height:22px;border-radius:4px;border:1px solid var(--border)">
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-row">
+        <label>Watermark Position</label>
+        <select class="settings-select" id="wm-position" onchange="updateWatermarkStyle()">
+          <option value="bottom-right" selected>Bottom Right</option>
+          <option value="bottom-left">Bottom Left</option>
+          <option value="top-right">Top Right</option>
+          <option value="top-left">Top Left</option>
+          <option value="center">Center</option>
+        </select>
+      </div>
+
+      <div class="settings-row">
+        <label>Watermark Font</label>
+        <select class="settings-select" id="wm-font-family" onchange="updateWatermarkStyle()">
+          <option value="'Syne',sans-serif" selected>Syne (Default)</option>
+          <option value="'JetBrains Mono',monospace">JetBrains Mono</option>
+          <option value="'Fira Code',monospace">Fira Code</option>
+          <option value="sans-serif">System Sans</option>
+          <option value="serif">System Serif</option>
+          <option value="monospace">System Mono</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- ══ EDITOR TYPOGRAPHY ══ -->
+    <div class="settings-section">
+      <div class="settings-label">Editor Typography</div>
+
+      <div class="settings-row">
+        <label>Font Family</label>
+        <select class="settings-select" id="editor-font-family" onchange="setEditorFontFamily(this.value)">
+          <option value="'JetBrains Mono',monospace" selected>JetBrains Mono</option>
+          <option value="'Fira Code',monospace">Fira Code</option>
+          <option value="'Source Code Pro',monospace">Source Code Pro</option>
+          <option value="'Inconsolata',monospace">Inconsolata</option>
+          <option value="'IBM Plex Mono',monospace">IBM Plex Mono</option>
+          <option value="'Courier New',monospace">Courier New</option>
+          <option value="monospace">System Monospace</option>
+        </select>
+      </div>
+
+      <div class="settings-row">
+        <label>Font Size</label>
+        <select class="settings-select" id="font-size-select" onchange="setFontSize(this.value)">
+          <option value="10">10px — Micro</option>
+          <option value="11">11px — Compact</option>
+          <option value="12.5" selected>12.5px — Default</option>
+          <option value="14">14px — Comfortable</option>
+          <option value="16">16px — Large</option>
+          <option value="18">18px — XL</option>
+        </select>
+      </div>
+
+      <div class="settings-row">
+        <label>Line Height</label>
+        <select class="settings-select" onchange="setLineHeight(this.value)">
+          <option value="1.3">1.3 — Tight</option>
+          <option value="1.6" selected>1.6 — Default</option>
+          <option value="1.8">1.8 — Relaxed</option>
+          <option value="2.0">2.0 — Spacious</option>
+        </select>
+      </div>
+
+      <div class="settings-row">
+        <label>Tab Width</label>
+        <select class="settings-select" onchange="setTabWidth(this.value)">
+          <option value="2" selected>2 spaces</option>
+          <option value="4">4 spaces</option>
+          <option value="8">8 spaces</option>
+        </select>
+      </div>
+
+      <div class="settings-row">
+        <label>Letter Spacing</label>
+        <select class="settings-select" onchange="setLetterSpacing(this.value)">
+          <option value="-0.02em">Tighter</option>
+          <option value="0em" selected>Normal</option>
+          <option value="0.04em">Wider</option>
+          <option value="0.08em">Widest</option>
+        </select>
+      </div>
+
+      <div class="settings-row">
+        <label>Word Wrap</label>
+        <select class="settings-select" onchange="setWordWrap(this.value)">
+          <option value="pre-wrap" selected>On (Wrap)</option>
+          <option value="pre">Off (Scroll)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- ══ CURSOR ══ -->
+    <div class="settings-section">
+      <div class="settings-label">Cursor Style</div>
+
+      <div class="settings-row">
+        <label>Shape</label>
+        <select class="settings-select" onchange="setCursorStyle(this.value)">
+          <option value="line" selected>Line (│)</option>
+          <option value="block">Block (█)</option>
+          <option value="underscore">Underscore (_)</option>
+        </select>
+      </div>
+
+      <div class="settings-row">
+        <label>Glow Effect</label>
+        <select class="settings-select" onchange="setCursorGlow(this.value)">
+          <option value="strong" selected>Strong Glow</option>
+          <option value="soft">Soft Glow</option>
+          <option value="none">No Glow</option>
+        </select>
+      </div>
+
+      <div class="settings-row">
+        <label>Cursor Color</label>
+        <div style="display:flex;gap:5px;align-items:center">
+          <div class="color-swatch"><input type="color" value="#58a6ff" id="color-cursor-only"
+            oninput="applyCustomColor('--cursor-color',this.value,'color-chip-cursor-only')"></div>
+          <div class="color-preview-chip" id="color-chip-cursor-only" style="background:#58a6ff"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ ANIMATION ══ -->
+    <div class="settings-section">
+      <div class="settings-label">Animation Style</div>
+
+      <div class="settings-row">
+        <label>Typing Mode</label>
+        <select class="settings-select" id="typing-mode-select" onchange="setTypingMode(this.value)">
+          <option value="smooth" selected>Smooth — even pace</option>
+          <option value="burst">Burst — fast then pause</option>
+          <option value="human">Human — slight variation</option>
+        </select>
+      </div>
+
+      <div class="settings-row">
+        <label>Switch Overlay Style</label>
+        <select class="settings-select" onchange="setSwitchOverlayStyle(this.value)">
+          <option value="dark" selected>Dark Blur</option>
+          <option value="slide">Slide Label</option>
+          <option value="minimal">Minimal (no overlay)</option>
+        </select>
+      </div>
+
+      <div class="settings-row">
+        <label>Progress Bar Style</label>
+        <select class="settings-select" onchange="setProgressStyle(this.value)">
+          <option value="gradient" selected>Gradient</option>
+          <option value="solid">Solid Accent</option>
+          <option value="pulse">Pulse</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- ══ LAYOUT ══ -->
+    <div class="settings-section">
+      <div class="settings-label">Layout</div>
+
+      <div class="settings-row">
+        <label>View Mode</label>
+        <select class="settings-select" onchange="setLayout(this.value)">
+          <option value="stack">9:16 Stack (Reels/TikTok)</option>
+          <option value="side">16:9 Side-by-Side (YouTube)</option>
+        </select>
+      </div>
+
+      <div class="settings-row">
+        <label>Editor Background Pattern</label>
+        <select class="settings-select" onchange="setEditorPattern(this.value)">
+          <option value="none" selected>None — Solid</option>
+          <option value="dots">Dots</option>
+          <option value="grid">Grid</option>
+          <option value="scanlines">Scanlines</option>
+        </select>
+      </div>
+
+      <div class="settings-row">
+        <label>Show Line Numbers</label>
+        <select class="settings-select" onchange="setLineNumbers(this.value)">
+          <option value="show" selected>Visible</option>
+          <option value="hide">Hidden</option>
+        </select>
+      </div>
+
+      <div class="settings-row">
+        <label>Tab Label Style</label>
+        <select class="settings-select" onchange="setTabLabelStyle(this.value)">
+          <option value="filename" selected>001-index.html</option>
+          <option value="short">HTML / CSS / JS</option>
+          <option value="icon">Icon only</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- ══ BRANDING ══ -->
+    <div class="settings-section">
+      <div class="settings-label">Branding</div>
+      <button class="settings-btn" onclick="document.getElementById('logo-upload').click()">
+        📁 Upload Logo Image
+      </button>
+      <button class="settings-btn" onclick="exportCurrentCode()">
+        💾 Export Code as .html
+      </button>
+    </div>
+
+    <!-- ══ KEYBOARD SOUND ══ -->
+    <div class="settings-section">
+      <div class="settings-label">⌨ Keyboard Sound</div>
+
+      <div class="settings-row">
+        <label>Sound</label>
+        <select class="settings-select" id="sound-enabled" onchange="updateSoundStatus()">
+          <option value="on">On</option>
+          <option value="off" selected>Off</option>
+        </select>
+      </div>
+
+      <div class="settings-row">
+        <label>Sound Type</label>
+        <select class="settings-select" id="sound-type">
+          <option value="mechanical" selected>Mechanical — sharp click</option>
+          <option value="soft">Soft — membrane thud</option>
+          <option value="typewriter">Typewriter — clack</option>
+          <option value="cherry">Cherry MX — two-phase</option>
+        </select>
+      </div>
+
+      <div class="settings-row">
+        <label>Volume</label>
+        <select class="settings-select" id="sound-volume">
+          <option value="0.1">10% — Very quiet</option>
+          <option value="0.25" selected>25% — Subtle</option>
+          <option value="0.5">50% — Normal</option>
+          <option value="0.8">80% — Loud</option>
+          <option value="1.0">100% — Max</option>
+        </select>
+      </div>
+
+      <div class="settings-row">
+        <label style="color:var(--text-dim);font-size:10px;line-height:1.5">
+          Sound is generated live using Web Audio API.
+          No audio files — zero extra download size.
+        </label>
+      </div>
+    </div>
+
+    <!-- ══ VIDEO RECORDING ══ -->
+    <div class="settings-section">
+      <div class="settings-label">⏺ Video Recording</div>
+
+      <div class="settings-row">
+        <label>Countdown Before Start</label>
+        <select class="settings-select" id="rec-countdown">
+          <option value="0">No countdown</option>
+          <option value="3" selected>3 seconds</option>
+          <option value="5">5 seconds</option>
+        </select>
+      </div>
+
+      <div class="settings-row">
+        <label>Auto-Start Recording</label>
+        <select class="settings-select" id="rec-auto-start">
+          <option value="no" selected>Manual (use ⏺ Rec button)</option>
+          <option value="yes">Auto when animation starts</option>
+        </select>
+      </div>
+
+      <div class="settings-row">
+        <label>Auto-Stop Recording</label>
+        <select class="settings-select" id="rec-auto-stop">
+          <option value="no" selected>Manual (use ■ Stop button)</option>
+          <option value="yes">Auto when animation finishes</option>
+        </select>
+      </div>
+
+      <div class="settings-row">
+        <label style="color:var(--text-dim);font-size:10px;line-height:1.6">
+          Output format: <strong style="color:var(--text-secondary)">.webm</strong> (VP9)<br>
+          Resolution: up to <strong style="color:var(--text-secondary)">1920×1080</strong><br>
+          To convert to .mp4: drag the .webm into
+          <strong style="color:var(--accent)">HandBrake</strong> (free)
+          or <strong style="color:var(--accent)">VLC</strong>.
+          TikTok, YouTube and Instagram all accept .webm directly.
+        </label>
+      </div>
+    </div>
+
+    <!-- ══ HOTKEYS ══ -->
+    <div class="settings-section">
+      <div class="settings-label">Keyboard Shortcuts</div>
+      <div style="font-size:10.5px;color:var(--text-secondary);line-height:2.2">
+        <div><span class="key-chip">Space</span> Play / Pause</div>
+        <div><span class="key-chip">R</span> Reset animation</div>
+        <div><span class="key-chip">Ctrl+K</span> Open paste modal</div>
+        <div><span class="key-chip">→ / ←</span> Speed ±10%</div>
+        <div><span class="key-chip">S</span> Toggle settings</div>
+        <div><span class="key-chip">Esc</span> Close panels</div>
+        <div><span class="key-chip">V</span> Start / Stop recording</div>
+        <div><span class="key-chip">M</span> Mute / Unmute sound</div>
+      </div>
+    </div>
+
+  </div><!-- end settings-panel -->
+
+</div><!-- end main -->
+
+<!-- ════════════════════════════════════════════
+     BOTTOM BAR
+     ════════════════════════════════════════════ -->
+<div id="bottombar">
+  <div id="progress-bar-wrap" title="Typing progress">
+    <div id="progress-bar"></div>
+  </div>
+
+  <span id="char-counter">0 / 0 chars</span>
+  <span id="speed-display">— cps</span>
+  <span id="sound-status" title="Click to toggle sound" onclick="quickToggleSound()">🔇</span>
+
+  <div class="bottombar-right">
+    <span id="line-col-display">Ln 1</span>
+    <div id="aspect-toggle">
+      <button class="aspect-btn active" onclick="setAspectBtn(this,'stack')">9:16</button>
+      <button class="aspect-btn"        onclick="setAspectBtn(this,'side')">16:9</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     PASTE MODAL
+     ════════════════════════════════════════════ -->
+<div id="paste-modal">
+  <div class="modal-box">
+
+    <div class="modal-header">
+      <span>📋 Paste Your Code</span>
+      <span class="modal-close-btn" onclick="closePasteModal()">✕</span>
+    </div>
+
+    <div class="modal-body">
+
+      <div class="modal-field">
+        <label>Page / Project Title (goes inside &lt;title&gt;)</label>
+        <input type="text" class="modal-input" id="modal-title"
+          placeholder="My Portfolio" value="Hello World">
+      </div>
+
+      <div class="modal-field">
+        <label>HTML — paste body content only (boilerplate is auto-added)</label>
+        <textarea class="modal-textarea" id="modal-html"
+          placeholder="<h1>Hello World</h1>&#10;<p>My content here</p>"
+          style="min-height:110px"></textarea>
+      </div>
+
+      <div class="modal-field">
+        <label>CSS — optional</label>
+        <textarea class="modal-textarea" id="modal-css"
+          placeholder="body { background: #1a1a2e; }&#10;h1 { color: #58a6ff; }"
+          style="min-height:90px"></textarea>
+      </div>
+
+      <div class="modal-field">
+        <label>JavaScript — optional</label>
+        <textarea class="modal-textarea" id="modal-js"
+          placeholder="document.querySelector('h1').textContent = 'Hello!';"
+          style="min-height:80px"></textarea>
+      </div>
+
+      <div class="modal-field">
+        <label>Total Duration (seconds) &amp; Speed Multiplier</label>
+        <div class="modal-time-row">
+          <input type="number" id="modal-timer" value="30" min="5" max="3600" title="Total time">
+          <span style="color:var(--text-secondary);font-size:11px">s</span>
+          <button class="speed-btn" onclick="adjustSpeed(-0.25)" title="Slower">−</button>
+          <span id="modal-speed-display">1×</span>
+          <button class="speed-btn" onclick="adjustSpeed(+0.25)" title="Faster">+</button>
+          <button class="speed-btn" onclick="resetSpeed()" title="Reset speed">1×</button>
+          <span id="modal-cps-preview" style="font-size:10px;color:var(--text-dim)"></span>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closePasteModal()">Cancel</button>
+      <button class="btn-primary"   onclick="applyPastedCode()">✓ Apply &amp; Ready</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- Hotkey toast notification -->
+<div id="hotkey-toast"></div>
+
+<!-- ════════════════════════════════════════════════════════
+     JAVASCRIPT ENGINE
+     ════════════════════════════════════════════════════════ -->
+<script>
+'use strict';
+
+// ══════════════════════════════════════════════════
+//  THEME PRESETS
+// ══════════════════════════════════════════════════
+const THEME_PRESETS = {
+  'github-dark': {
+    '--bg-primary':    '#0d1117',
+    '--bg-secondary':  '#161b22',
+    '--bg-tertiary':   '#1c2128',
+    '--bg-editor':     '#0d1117',
+    '--bg-tab':        '#1c2128',
+    '--bg-tab-active': '#0d1117',
+    '--border':        '#30363d',
+    '--border-light':  '#21262d',
+    '--accent':        '#58a6ff',
+    '--accent2':       '#3fb950',
+    '--accent3':       '#f78166',
+    '--text-primary':  '#e6edf3',
+    '--text-secondary':'#8b949e',
+    '--text-dim':      '#484f58',
+    '--cursor-color':  '#58a6ff',
+    '--code-bg':       '#0d1117',
+    '--code-text':     '#e6edf3',
+    '--html-color':    '#f97583',
+    '--css-color':     '#79b8ff',
+    '--js-color':      '#ffea7f',
+  },
+  'cyberpunk': {
+    '--bg-primary':    '#0a0a0f',
+    '--bg-secondary':  '#111118',
+    '--bg-tertiary':   '#16161f',
+    '--bg-editor':     '#0d0d14',
+    '--bg-tab':        '#111118',
+    '--bg-tab-active': '#0d0d14',
+    '--border':        '#2a2a3d',
+    '--border-light':  '#1e1e2d',
+    '--accent':        '#f7c948',
+    '--accent2':       '#00ffe5',
+    '--accent3':       '#ff6b6b',
+    '--text-primary':  '#d4d4d4',
+    '--text-secondary':'#777799',
+    '--text-dim':      '#444455',
+    '--cursor-color':  '#f7c948',
+    '--code-bg':       '#0d0d14',
+    '--code-text':     '#d4d4d4',
+    '--html-color':    '#f28779',
+    '--css-color':     '#73d0ff',
+    '--js-color':      '#ffd580',
+  },
+  'dracula': {
+    '--bg-primary':    '#282a36',
+    '--bg-secondary':  '#21222c',
+    '--bg-tertiary':   '#191a21',
+    '--bg-editor':     '#282a36',
+    '--bg-tab':        '#21222c',
+    '--bg-tab-active': '#282a36',
+    '--border':        '#44475a',
+    '--border-light':  '#3a3c4e',
+    '--accent':        '#bd93f9',
+    '--accent2':       '#50fa7b',
+    '--accent3':       '#ff5555',
+    '--text-primary':  '#f8f8f2',
+    '--text-secondary':'#6272a4',
+    '--text-dim':      '#44475a',
+    '--cursor-color':  '#f8f8f0',
+    '--code-bg':       '#282a36',
+    '--code-text':     '#f8f8f2',
+    '--html-color':    '#ff79c6',
+    '--css-color':     '#8be9fd',
+    '--js-color':      '#f1fa8c',
+  },
+  'monokai': {
+    '--bg-primary':    '#272822',
+    '--bg-secondary':  '#1e1f1c',
+    '--bg-tertiary':   '#1a1b18',
+    '--bg-editor':     '#272822',
+    '--bg-tab':        '#1e1f1c',
+    '--bg-tab-active': '#272822',
+    '--border':        '#3d3e38',
+    '--border-light':  '#323329',
+    '--accent':        '#a6e22e',
+    '--accent2':       '#a6e22e',
+    '--accent3':       '#f92672',
+    '--text-primary':  '#f8f8f2',
+    '--text-secondary':'#75715e',
+    '--text-dim':      '#3d3e38',
+    '--cursor-color':  '#f8f8f0',
+    '--code-bg':       '#272822',
+    '--code-text':     '#f8f8f2',
+    '--html-color':    '#f92672',
+    '--css-color':     '#66d9e8',
+    '--js-color':      '#e6db74',
+  },
+  'nord': {
+    '--bg-primary':    '#2e3440',
+    '--bg-secondary':  '#3b4252',
+    '--bg-tertiary':   '#434c5e',
+    '--bg-editor':     '#2e3440',
+    '--bg-tab':        '#3b4252',
+    '--bg-tab-active': '#2e3440',
+    '--border':        '#4c566a',
+    '--border-light':  '#3b4252',
+    '--accent':        '#88c0d0',
+    '--accent2':       '#a3be8c',
+    '--accent3':       '#bf616a',
+    '--text-primary':  '#eceff4',
+    '--text-secondary':'#d8dee9',
+    '--text-dim':      '#4c566a',
+    '--cursor-color':  '#d8dee9',
+    '--code-bg':       '#2e3440',
+    '--code-text':     '#d8dee9',
+    '--html-color':    '#bf616a',
+    '--css-color':     '#88c0d0',
+    '--js-color':      '#ebcb8b',
+  },
+  'one-dark': {
+    '--bg-primary':    '#282c34',
+    '--bg-secondary':  '#21252b',
+    '--bg-tertiary':   '#1d2026',
+    '--bg-editor':     '#282c34',
+    '--bg-tab':        '#21252b',
+    '--bg-tab-active': '#282c34',
+    '--border':        '#181a1f',
+    '--border-light':  '#2c313c',
+    '--accent':        '#61afef',
+    '--accent2':       '#98c379',
+    '--accent3':       '#e06c75',
+    '--text-primary':  '#abb2bf',
+    '--text-secondary':'#5c6370',
+    '--text-dim':      '#3e4451',
+    '--cursor-color':  '#528bff',
+    '--code-bg':       '#282c34',
+    '--code-text':     '#abb2bf',
+    '--html-color':    '#e06c75',
+    '--css-color':     '#56b6c2',
+    '--js-color':      '#e5c07b',
+  },
+  'abyss': {
+    '--bg-primary':    '#000c18',
+    '--bg-secondary':  '#051221',
+    '--bg-tertiary':   '#0a1a2e',
+    '--bg-editor':     '#000c18',
+    '--bg-tab':        '#051221',
+    '--bg-tab-active': '#000c18',
+    '--border':        '#0e2a42',
+    '--border-light':  '#09192a',
+    '--accent':        '#6688cc',
+    '--accent2':       '#22aa44',
+    '--accent3':       '#f44747',
+    '--text-primary':  '#6688cc',
+    '--text-secondary':'#384870',
+    '--text-dim':      '#1e3050',
+    '--cursor-color':  '#ddbb88',
+    '--code-bg':       '#000c18',
+    '--code-text':     '#6688cc',
+    '--html-color':    '#2277ff',
+    '--css-color':     '#22aa44',
+    '--js-color':      '#ddbb88',
+  },
+};
+
+function applyTheme(name) {
+  const preset = THEME_PRESETS[name];
+  if (!preset) return;
+  Object.entries(preset).forEach(([prop, val]) => {
+    document.documentElement.style.setProperty(prop, val);
+  });
+  // Also update the color picker values to match
+  syncColorPickerToTheme(preset);
+  renderEditor();
+}
+
+function syncColorPickerToTheme(preset) {
+  const maps = [
+    ['color-code-bg',      '--code-bg',      'color-chip-code-bg'],
+    ['color-code-text',    '--code-text',     'color-chip-code-text'],
+    ['color-accent',       '--accent',        'color-chip-accent'],
+    ['color-preview-bg',   '--preview-bg',    'color-chip-preview-bg'],
+  ];
+  maps.forEach(([pickerId, cssVar, chipId]) => {
+    const val = preset[cssVar];
+    if (!val) return;
+    const picker = document.getElementById(pickerId);
+    const chip   = document.getElementById(chipId);
+    if (picker) picker.value = hexFrom(val);
+    if (chip)   chip.style.background = val;
+  });
+}
+
+function hexFrom(color) {
+  // Convert short-form hex or color to 6-digit hex for input[type=color]
+  if (color && color.startsWith('#') && color.length === 4) {
+    return '#' + color[1]+color[1]+color[2]+color[2]+color[3]+color[3];
+  }
+  return color;
+}
+
+function applyCustomColor(cssVar, value, chipId) {
+  document.documentElement.style.setProperty(cssVar, value);
+  if (chipId) {
+    const chip = document.getElementById(chipId);
+    if (chip) chip.style.background = value;
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════
+const BOILERPLATE = (title) => [
+  '<!DOCTYPE html>',
+  '<html lang="en">',
+  '<head>',
+  '  <meta charset="UTF-8">',
+  '  <meta name="viewport" content="width=device-width, initial-scale=1.0">',
+  `  <title>${title}</title>`,
+  '  <style id="_cyl_css_"></style>',
+  '</head>',
+  '<body>',
+].join('\n') + '\n';
+
+const BOILERPLATE_CLOSE = '\n</body>\n</html>';
+
+const state = {
+  phase:             'idle',
+  isTyping:          false,
+  isPaused:          false,
+  complete:          false,
+  tabs:              ['html', 'css', 'js'],
+  activeTab:         'html',
+  codes:             { html: '', css: '', js: '' },
+  typed:             { html: '', css: '', js: '' },
+  title:             'Hello World',
+  speedMultiplier:   1.0,
+  animFrame:         null,
+  typingMode:        'smooth',    // smooth | burst | human
+  tabLabelStyle:     'filename',
+  switchOverlayStyle:'dark',
+  tabWidthSetting:   2, // visual indent width; see normalizeIndentForDisplay()
+};
+
+// ══════════════════════════════════════════════════
+//  TAB METADATA
+// ══════════════════════════════════════════════════
+const TAB_META = {
+  html: { label: '001-index.html',  cls: 'tab-html', colorVar: '--html-color' },
+  css:  { label: '001-style.css',   cls: 'tab-css',  colorVar: '--css-color'  },
+  js:   { label: '001-script.js',   cls: 'tab-js',   colorVar: '--js-color'   },
+};
+
+// ══════════════════════════════════════════════════
+//  TABS RENDERING & MANAGEMENT
+// ══════════════════════════════════════════════════
+function renderTabs() {
+  const bar    = document.getElementById('tabs-bar');
+  const addBtn = document.getElementById('tab-add-btn');
+
+  // Clear all but the add button
+  bar.innerHTML = '';
+
+  // Render each tab
+  state.tabs.forEach(lang => {
+    const meta = TAB_META[lang];
+    const div  = document.createElement('div');
+    div.className = `tab ${meta.cls}` + (state.activeTab === lang ? ' active' : '');
+    div.dataset.lang = lang;
+
+    // Colored dot
+    const dot = document.createElement('span');
+    dot.className = 'tab-dot';
+
+    // Tab name label
+    const label = document.createElement('span');
+    label.textContent = meta.label;
+
+    // Close button — only shown when not currently typing, or always visible
+    const closeBtn = document.createElement('span');
+    closeBtn.className = 'tab-close-btn';
+    closeBtn.textContent = '✕';
+    closeBtn.title = `Remove ${lang.toUpperCase()} tab`;
+    closeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      removeTab(lang);
+    });
+
+    div.appendChild(dot);
+    div.appendChild(label);
+    div.appendChild(closeBtn);
+
+    // Clicking the tab (not the close button) switches to it
+    div.addEventListener('click', (e) => {
+      if (e.target === closeBtn) return;
+      switchTab(lang);
+    });
+
+    bar.appendChild(div);
+  });
+
+  // Add the + button at end
+  bar.appendChild(addBtn);
+
+  // Show/hide add button based on missing tabs
+  const missing = ['html','css','js'].filter(l => !state.tabs.includes(l));
+  addBtn.style.display = missing.length > 0 ? 'flex' : 'none';
+  addBtn.title = missing.length ? `Add back: ${missing.map(l=>l.toUpperCase()).join(', ')}` : '';
+}
+
+function switchTab(lang) {
+  if (!state.tabs.includes(lang)) return;
+  if (state.activeTab === lang) return;
+  state.activeTab = lang;
+  renderTabs();
+  renderEditor();
+}
+
+function removeTab(lang) {
+  // Don't remove during active typing — prevents desync
+  if (state.isTyping) { showToast('Pause or reset before removing a tab'); return; }
+  state.tabs = state.tabs.filter(t => t !== lang);
+  if (state.activeTab === lang) {
+    state.activeTab = state.tabs[0] || 'html';
+  }
+  renderTabs();
+  renderEditor();
+}
+
+function addRemovedTab() {
+  const missing = ['html','css','js'].filter(l => !state.tabs.includes(l));
+  if (!missing.length) return;
+  // Add the first missing tab back
+  state.tabs.push(missing[0]);
+  state.tabs.sort((a, b) => ['html','css','js'].indexOf(a) - ['html','css','js'].indexOf(b));
+  renderTabs();
+  renderEditor();
+}
+
+// ══════════════════════════════════════════════════
+//  SYNTAX HIGHLIGHTING
+// ══════════════════════════════════════════════════
+function escapeHtml(str) {
+  return str
+    .replace(/&/g,  '&amp;')
+    .replace(/</g,  '&lt;')
+    .replace(/>/g,  '&gt;')
+    .replace(/"/g,  '&quot;');
+}
+
+function highlightHTML(code) {
+  let s = escapeHtml(code);
+
+  // HTML comments
+  s = s.replace(/(&lt;!--[\s\S]*?--&gt;)/g,
+    '<span class="hl-comment">$1</span>');
+
+  // DOCTYPE
+  s = s.replace(/(&lt;!DOCTYPE[^&]*&gt;)/gi,
+    '<span class="hl-doctype">$1</span>');
+
+  // Closing tags:  </tagname>
+  s = s.replace(/(&lt;\/)([\w-]+)(&gt;)/g,
+    '<span class="hl-tag">$1$2$3</span>');
+
+  // Opening / void tags with attributes
+  s = s.replace(/(&lt;[\w-]+)((?:\s[\s\S]*?)?)(\/?\s*&gt;)/g, (match, open, middle, close) => {
+    // Highlight attributes inside the tag
+    const attrPart = middle.replace(
+      /([\w-:@.#]+)(=)(&quot;(?:[^&]|&(?!quot;))*&quot;)/g,
+      '<span class="hl-attr">$1</span><span class="hl-punct">$2</span><span class="hl-val">$3</span>'
+    );
+    return `<span class="hl-tag">${open}</span>${attrPart}<span class="hl-tag">${close}</span>`;
+  });
+
+  return s;
+}
+
+function highlightCSS(code) {
+  let s = escapeHtml(code);
+
+  // Block comments
+  s = s.replace(/(\/\*[\s\S]*?\*\/)/g,
+    '<span class="hl-comment">$1</span>');
+
+  // Selectors (anything before a {)
+  s = s.replace(/([^{};\/\n][^{};\/\n]*)(\{)/g,
+    '<span class="hl-sel">$1</span><span class="hl-punct">$2</span>');
+
+  // Properties and values:  prop: value;
+  s = s.replace(/([\w-]+)(\s*:\s*)([^;{}\n]+)(;)/g,
+    '<span class="hl-prop">$1</span><span class="hl-punct">$2</span><span class="hl-cssval">$3</span><span class="hl-punct">$4</span>');
+
+  // Closing braces
+  s = s.replace(/(\})/g, '<span class="hl-punct">$1</span>');
+
+  return s;
+}
+
+function highlightJS(code) {
+  const escaped = escapeHtml(code);
+
+  const keywords = [
+    'const','let','var','function','return','if','else','for','while',
+    'do','class','new','this','typeof','instanceof','import','export',
+    'default','async','await','try','catch','finally','switch','case',
+    'break','continue','of','in','from','null','undefined','true','false',
+    'throw','delete','void','yield',
+  ];
+
+  // FIXED: one combined regex, tried left-to-right at every position, so
+  // each character is only ever claimed by exactly one token type. This
+  // means a string's contents (including a literal "class" or "//") can
+  // never be re-matched by a later token type, because the string
+  // alternative already consumed it in this same pass.
+  const tokenRegex = new RegExp(
+    '(\\/\\/[^\\n]*)' +                                                          // 1: line comment
+    '|(\\/\\*[\\s\\S]*?\\*\\/)' +                                                 // 2: block comment
+    '|(`(?:[^`\\\\]|\\\\.)*`|&quot;(?:[^&]|&(?!quot;))*&quot;|\'(?:[^\'\\\\]|\\\\.)*\')' + // 3: string
+    '|\\b(' + keywords.join('|') + ')\\b' +                                      // 4: keyword
+    '|\\b([A-Za-z_$][\\w$]*)\\s*(?=\\()' +                                       // 5: function name
+    '|\\b(\\d+\\.?\\d*(?:e[+-]?\\d+)?)\\b',                                      // 6: number
+    'g'
+  );
+
+  return escaped.replace(tokenRegex, (m, lineComment, blockComment, str, kw, fn, num) => {
+    if (lineComment  !== undefined) return `<span class="hl-comment">${lineComment}</span>`;
+    if (blockComment !== undefined) return `<span class="hl-comment">${blockComment}</span>`;
+    if (str          !== undefined) return `<span class="hl-string">${str}</span>`;
+    if (kw           !== undefined) return `<span class="hl-keyword">${kw}</span>`;
+    if (fn           !== undefined) return `<span class="hl-fn">${fn}</span>`;
+    if (num          !== undefined) return `<span class="hl-number">${num}</span>`;
+    return m;
+  });
+}
+
+function applyHighlight(code, lang) {
+  if (lang === 'html') return highlightHTML(code);
+  if (lang === 'css')  return highlightCSS(code);
+  if (lang === 'js')   return highlightJS(code);
+  return escapeHtml(code);
+}
+
+// ══════════════════════════════════════════════════
+//  EDITOR RENDERING
+// ══════════════════════════════════════════════════
+function getEditorCode(lang) {
+  // During typing or after complete: show typed content
+  if (state.isTyping || state.complete) {
+    return state.typed[lang] || '';
+  }
+  // Idle: show the full pasted code
+  return state.codes[lang] || '';
+}
+
+function buildHTMLDisplay(bodyCode) {
+  // Show ONLY the body code — no boilerplate in the editor view.
+  // The boilerplate still exists in state and is used for the live preview,
+  // but we hide it from the editor so it doesn't clutter the screen.
+  return highlightHTML(bodyCode);
+}
+
+// FIXED: "Tab Width" previously only set CSS tab-size, which only affects
+// literal \t characters. Nearly all pasted/typed code uses space indentation
+// (VS Code, Prettier, etc. default to spaces), so the setting visibly did
+// nothing for the vast majority of real code. This detects the indent unit
+// actually used in the code and rescales leading spaces to the chosen width
+// for display — it never touches the underlying stored code, so exports and
+// the live preview stay exactly as pasted.
+function detectIndentUnit(lines) {
+  const counts = {};
+  for (const line of lines) {
+    const m = line.match(/^( +)\S/);
+    if (m) {
+      const len = m[1].length;
+      counts[len] = (counts[len] || 0) + 1;
+    }
+  }
+  const lens = Object.keys(counts).map(Number).sort((a, b) => a - b);
+  if (!lens.length) return 2;
+  // Prefer the smallest indent depth that recurs (almost always level-1
+  // indentation); fall back to the smallest depth seen at all.
+  for (const l of lens) {
+    if (counts[l] >= 2) return l;
+  }
+  return lens[0];
+}
+
+function normalizeIndentForDisplay(code, unitOverride) {
+  const width = state.tabWidthSetting || 2;
+  const lines = code.split('\n');
+  const unit  = unitOverride || detectIndentUnit(lines);
+  if (unit === width) return code; // already matches, skip the work
+
+  return lines.map(line => {
+    const m = line.match(/^( +)/);
+    if (!m) return line;
+    const spaceCount = m[1].length;
+    const levels      = Math.round(spaceCount / unit);
+    return ' '.repeat(Math.max(levels, 0) * width) + line.slice(spaceCount);
+  }).join('\n');
+}
+
+function renderEditor(precomputedUnit) {
+  const lang    = state.activeTab;
+  const rawCode = getEditorCode(lang);
+  const code    = normalizeIndentForDisplay(rawCode, precomputedUnit);
+  const display = document.getElementById('code-display');
+
+  // Build highlighted HTML
+  let innerHTML;
+  if (lang === 'html') {
+    innerHTML = buildHTMLDisplay(code);
+  } else {
+    innerHTML = applyHighlight(code, lang);
+  }
+
+  // Add typing cursor at the end when animating
+  const userIsEditing = document.activeElement === display;
+  if (state.isTyping && !state.isPaused && state.phase === `typing-${lang}`) {
+    innerHTML += '<span class="typing-cursor" id="live-cursor"></span>';
+  } else if (!state.isTyping && !state.complete && !userIsEditing) {
+    // Idle cursor blinks at end — but not while the user has a real caret
+    // in the editor from manual typing, which may be mid-text, not at the end.
+    innerHTML += '<span class="typing-cursor idle" id="live-cursor"></span>';
+  }
+
+  display.innerHTML = innerHTML;
+
+  // FIXED: when manually editing and the code ends with a newline (i.e.
+  // right after pressing Enter, about to type a fresh last line), append
+  // a genuinely separate empty text node. innerHTML parsing can't create
+  // two adjacent text nodes on its own, so without this there's nothing
+  // for setCaretCharOffset to redirect the caret into, and it lands back
+  // at the ambiguous "end of a trailing newline" position.
+  if (userIsEditing && code.endsWith('\n')) {
+    display.appendChild(document.createTextNode(''));
+  }
+
+  // Build line numbers based on what's visible.
+  // Since boilerplate is hidden, line numbers only count the actual code lines.
+  renderLineNumbers(code);
+
+  // Auto scroll to bottom during typing
+  if (state.isTyping) {
+    autoScrollEditor();
+  }
+}
+
+function renderLineNumbers(fullText) {
+  const lines     = (fullText || '').split('\n');
+  const container = document.getElementById('line-numbers');
+  let html = '';
+  const count = Math.max(lines.length, 1);
+  for (let i = 1; i <= count; i++) {
+    html += `<div class="line-num-item">${i}</div>`;
+  }
+  container.innerHTML = html;
+}
+
+function autoScrollEditor() {
+  const scroll = document.getElementById('code-scroll');
+  if (scroll) {
+    scroll.scrollTop = scroll.scrollHeight;
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  LIVE PREVIEW — CRITICAL: JS must actually run
+// ══════════════════════════════════════════════════
+function updatePreview() {
+  const iframe    = document.getElementById('preview-iframe');
+  const errorBar  = document.getElementById('preview-error-bar');
+  const statusTxt = document.getElementById('preview-status-text');
+
+  // Use typed content during animation, or full content at idle/complete
+  const htmlBody = state.isTyping || state.complete
+    ? (state.typed.html || '')
+    : (state.codes.html || '');
+  const css = state.isTyping || state.complete
+    ? (state.typed.css  || '')
+    : (state.codes.css  || '');
+  const js  = state.isTyping || state.complete
+    ? (state.typed.js   || '')
+    : (state.codes.js   || '');
+
+  // Build a complete HTML document.
+  // CRITICAL: The JS is wrapped in try/catch so errors display inside the preview
+  // rather than crashing the iframe silently.
+  // The <\/script> escape prevents the outer HTML parser from closing the script tag early.
+  // Build preview document.
+  // CRITICAL FIX: Do NOT wrap JS in an IIFE.
+  // If user JS declares functions (e.g. function celebrate(){})
+  // and HTML calls them via onclick="celebrate()", those functions
+  // must live in the iframe's global scope — not scoped inside an IIFE.
+  // We keep a top-level try/catch so partial/invalid JS during typing
+  // shows a visible error bar inside the preview instead of failing silently.
+  const safeJS = js
+    ? ('try {\n' + js + '\n} catch(err) {\n'
+      + '  var __errBar = document.createElement("div");\n'
+      + '  __errBar.style.cssText = "position:fixed;bottom:0;left:0;right:0;'
+      + 'background:#2d1b1b;color:#f97583;padding:6px 10px;font-size:11px;'
+      + 'font-family:monospace;border-top:1px solid #f97583;z-index:9999";\n'
+      + '  __errBar.textContent = "JS Error: " + err.message;\n'
+      + '  document.body.appendChild(__errBar);\n'
+      + '}')
+    : '';
+
+  const previewDoc = [
+    '<!DOCTYPE html>',
+    '<html lang="en">',
+    '<head>',
+    '<meta charset="UTF-8">',
+    '<meta name="viewport" content="width=device-width, initial-scale=1.0">',
+    `<title>${escapeHtml(state.title || 'Preview')}</title>`,
+    '<style>',
+    css,
+    '</style>',
+    '</head>',
+    '<body>',
+    htmlBody,
+    '<scri' + 'pt>',
+    safeJS,
+    '</' + 'script>',
+    '</body>',
+    '</html>',
+  ].join('\n');
+
+  try {
+    const doc = iframe.contentDocument || iframe.contentWindow.document;
+    doc.open();
+    doc.write(previewDoc);
+    doc.close();
+    errorBar.style.display  = 'none';
+    statusTxt.textContent   = state.isTyping ? 'Live' : (state.complete ? 'Complete' : 'Ready');
+  } catch (err) {
+    errorBar.style.display  = 'block';
+    errorBar.textContent    = '⚠ Preview render error: ' + err.message;
+    statusTxt.textContent   = 'Error';
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  TYPING ENGINE — requestAnimationFrame based
+//  This is the core engine from File 1, which is
+//  more reliable and correctly handles JS preview.
+// ══════════════════════════════════════════════════
+let typingQueue    = [];  // Array of { lang, code } objects in order
+let queueIdx       = 0;   // Current position in typingQueue
+let charIdx        = 0;   // Current char position in current item
+let globalTyped    = 0;   // Total chars typed so far
+let globalTotal    = 0;   // Total chars to type across all tabs
+let msPerChar      = 0;   // Milliseconds per character
+let accumulated    = 0;   // Accumulated ms not yet consumed
+let lastTimestamp  = null;// Last animation frame timestamp
+
+function buildTypingQueue() {
+  typingQueue = [];
+  globalTotal = 0;
+
+  // Only include tabs with content, in tab order
+  state.tabs.forEach(lang => {
+    const code = state.codes[lang] || '';
+    if (code.trim().length > 0) {
+      typingQueue.push({ lang, code });
+      globalTotal += code.length;
+    }
+  });
+}
+
+function calcMsPerChar() {
+  // Total timer duration from input
+  const totalTimeSec   = parseFloat(document.getElementById('timer-input').value) || 30;
+  const totalTimeMs    = totalTimeSec * 1000;
+
+  // Subtract 1 second per tab switch (1s fixed switch time between each language)
+  const switchCount    = typingQueue.length > 1 ? typingQueue.length - 1 : 0;
+  const switchTotalMs  = switchCount * 1000;
+  const typingMs       = Math.max(500, totalTimeMs - switchTotalMs);
+
+  // Distribute evenly per character, respecting speed multiplier
+  msPerChar = globalTotal > 0
+    ? (typingMs / globalTotal) / (state.speedMultiplier || 1.0)
+    : 50;
+
+  // Clamp to reasonable range
+  msPerChar = Math.max(8, Math.min(500, msPerChar));
+
+  // Show CPS in bottom bar
+  const cps = Math.round(1000 / msPerChar);
+  document.getElementById('speed-display').textContent = cps + ' cps';
+
+  return msPerChar;
+}
+
+function startTyping() {
+  if (state.isTyping) return;
+
+  // If no code at all, open modal instead
+  const hasAnyCode = state.tabs.some(lang => (state.codes[lang] || '').trim().length > 0);
+  if (!hasAnyCode) {
+    openPasteModal();
+    return;
+  }
+
+  // Reset state for fresh animation
+  state.isTyping   = true;
+  state.isPaused   = false;
+  state.complete   = false;
+  state.typed      = { html: '', css: '', js: '' };
+
+  buildTypingQueue();
+  calcMsPerChar();
+
+  queueIdx       = 0;
+  charIdx        = 0;
+  globalTyped    = 0;
+  accumulated    = 0;
+  lastTimestamp  = null;
+
+  if (typingQueue.length === 0) {
+    finishTyping();
+    return;
+  }
+
+  // UI: disable start, enable pause
+  document.getElementById('btn-start').disabled   = true;
+  document.getElementById('btn-pause').disabled   = false;
+  document.getElementById('btn-pause').textContent = '⏸ Pause';
+  document.getElementById('btn-pause').style.color = '';
+  // Hide timer once animation starts — user set it already, no need to see it
+  document.getElementById('timer-wrap').style.display = 'none';
+
+  // Activate the first language tab
+  const firstLang = typingQueue[0].lang;
+  state.activeTab  = firstLang;
+  renderTabs();
+  setPhaseDisplay(`typing-${firstLang}`);
+  renderEditor();
+
+  // Kick off the animation loop
+  state.animFrame = requestAnimationFrame(typingLoop);
+}
+
+function typingLoop(timestamp) {
+  // Guard: stop if not typing or paused
+  if (!state.isTyping || state.isPaused) return;
+
+  // First frame: initialize timestamp
+  if (lastTimestamp === null) {
+    lastTimestamp = timestamp;
+  }
+
+  const delta    = timestamp - lastTimestamp;
+  lastTimestamp  = timestamp;
+  accumulated   += delta;
+
+  // How many characters to type this frame — apply typing mode variation
+  let effectiveMsPerChar = msPerChar;
+  if (state.typingMode === 'human') {
+    // Human variation: ±25% random jitter per frame to simulate natural typing rhythm
+    const jitter = 1 + (Math.random() - 0.5) * 0.5;
+    effectiveMsPerChar = msPerChar * jitter;
+  } else if (state.typingMode === 'burst') {
+    // Burst mode: type 3–6 chars quickly, then a pause
+    // We use a sine wave based on globalTyped to create rhythm
+    const burstPhase = Math.sin(globalTyped / 8) * 0.6;
+    effectiveMsPerChar = msPerChar * (1 - burstPhase);
+    effectiveMsPerChar = Math.max(8, effectiveMsPerChar);
+  }
+  let charsThisFrame = Math.floor(accumulated / effectiveMsPerChar);
+  accumulated       -= charsThisFrame * effectiveMsPerChar;
+
+  let editorDirty   = false;
+  let previewDirty  = false;
+
+  for (let i = 0; i < charsThisFrame; i++) {
+    // Check if we've exhausted the queue
+    if (queueIdx >= typingQueue.length) {
+      finishTyping();
+      return;
+    }
+
+    const currentItem = typingQueue[queueIdx];
+
+    // Check if current language is done
+    if (charIdx >= currentItem.code.length) {
+      // Move to next language in queue
+      queueIdx++;
+      charIdx = 0;
+
+      if (queueIdx >= typingQueue.length) {
+        finishTyping();
+        return;
+      }
+
+      // Trigger 1-second tab switch animation, then continue
+      const nextItem = typingQueue[queueIdx];
+      doTabSwitch(nextItem.lang, function() {
+        // After switch: resume the loop
+        state.isTyping  = true;
+        lastTimestamp   = null;
+        accumulated     = 0;
+        state.animFrame = requestAnimationFrame(typingLoop);
+      });
+      return; // Exit loop — will resume after switch
+    }
+
+    // Type the next character
+    const char = currentItem.code[charIdx];
+    state.typed[currentItem.lang] = (state.typed[currentItem.lang] || '') + char;
+    charIdx++;
+    globalTyped++;
+    editorDirty  = true;
+    previewDirty = true;
+
+    // Play keyboard click sound for this character
+    playKeyClick(char);
+  }
+
+  // Update UI if anything changed this frame
+  if (editorDirty) {
+    updateProgressBar();
+    // Only re-render editor if we're on the currently active tab's language
+    const currentLang = typingQueue[queueIdx] ? typingQueue[queueIdx].lang : null;
+    if (currentLang && state.activeTab === currentLang) {
+      renderEditor();
+    }
+  }
+
+  if (previewDirty) {
+    updatePreview();
+  }
+
+  // Schedule next frame
+  state.animFrame = requestAnimationFrame(typingLoop);
+}
+
+function doTabSwitch(nextLang, callback) {
+  // Pause the typing engine momentarily
+  state.isTyping = false;
+
+  // Show the switch overlay
+  const overlay    = document.getElementById('switch-overlay');
+  const switchText = document.getElementById('switch-text');
+  const langLabels = { html: 'HTML', css: 'CSS', js: 'JavaScript' };
+  switchText.textContent = `Switching to ${langLabels[nextLang] || nextLang}…`;
+  setPhaseDisplay(`switch-${nextLang}`);
+  overlay.classList.add('show');
+
+  // After 1 second: hide overlay, activate new tab, resume
+  setTimeout(function() {
+    overlay.classList.remove('show');
+    state.activeTab = nextLang;
+    renderTabs();
+    setPhaseDisplay(`typing-${nextLang}`);
+    state.isTyping = true;
+    renderEditor();
+    callback();
+  }, 1000);
+}
+
+function finishTyping() {
+  // Stop the animation
+  state.isTyping = false;
+  state.complete = true;
+  if (state.animFrame) {
+    cancelAnimationFrame(state.animFrame);
+    state.animFrame = null;
+  }
+
+  setPhaseDisplay('complete');
+  updateProgressBar(true); // Force 100%
+
+  // UI: swap start button to Replay
+  const startBtn = document.getElementById('btn-start');
+  startBtn.disabled   = false;
+  startBtn.textContent = '↺ Replay';
+  startBtn.onclick    = replayTyping;
+
+  // Disable pause
+  const pauseBtn = document.getElementById('btn-pause');
+  pauseBtn.disabled    = true;
+  pauseBtn.textContent = '⏸ Pause';
+
+  // Final full preview update
+  updatePreview();
+  renderEditor();
+
+  // Brief glow on preview pane to signal completion
+  const pane = document.getElementById('preview-pane');
+  pane.classList.add('complete-pulse');
+  setTimeout(function() { pane.classList.remove('complete-pulse'); }, 800);
+
+  showToast('✓ Animation complete!');
+
+  // Auto-stop recording if that option is enabled
+  const autoStop = document.getElementById('rec-auto-stop');
+  if (autoStop && autoStop.value === 'yes' && isRecording) {
+    setTimeout(stopRecording, 800); // slight delay so last frame is captured
+  }
+}
+
+function replayTyping() {
+  const startBtn = document.getElementById('btn-start');
+  startBtn.textContent = '▶ Start';
+  startBtn.onclick    = startTyping;
+  resetAll();
+}
+
+function togglePause() {
+  if (!state.isTyping && !state.isPaused) return;
+
+  const pauseBtn = document.getElementById('btn-pause');
+
+  if (!state.isPaused) {
+    // Pause
+    state.isPaused = true;
+    if (state.animFrame) {
+      cancelAnimationFrame(state.animFrame);
+      state.animFrame = null;
+    }
+    setPhaseDisplay('paused');
+    pauseBtn.textContent = '▶ Resume';
+    pauseBtn.style.color = 'var(--accent2)';
+    showToast('⏸ Paused');
+  } else {
+    // Resume
+    state.isPaused   = false;
+    lastTimestamp    = null;
+    accumulated      = 0;
+    const currentLang = typingQueue[queueIdx] ? typingQueue[queueIdx].lang : 'html';
+    setPhaseDisplay(`typing-${currentLang}`);
+    pauseBtn.textContent = '⏸ Pause';
+    pauseBtn.style.color = '';
+    state.animFrame = requestAnimationFrame(typingLoop);
+    showToast('▶ Resumed');
+  }
+}
+
+function resetAll() {
+  // Cancel any running animation
+  if (state.animFrame) {
+    cancelAnimationFrame(state.animFrame);
+    state.animFrame = null;
+  }
+
+  // Reset all state
+  state.isTyping  = false;
+  state.isPaused  = false;
+  state.complete  = false;
+  state.typed     = { html: '', css: '', js: '' };
+
+  // Reset queue tracking
+  typingQueue    = [];
+  queueIdx       = 0;
+  charIdx        = 0;
+  globalTyped    = 0;
+  globalTotal    = 0;
+  accumulated    = 0;
+  lastTimestamp  = null;
+
+  // Hide switch overlay
+  document.getElementById('switch-overlay').classList.remove('show');
+
+  // Reset buttons
+  const startBtn = document.getElementById('btn-start');
+  startBtn.disabled   = false;
+  startBtn.textContent = '▶ Start';
+  startBtn.onclick    = startTyping;
+
+  const pauseBtn = document.getElementById('btn-pause');
+  pauseBtn.disabled   = true;
+  pauseBtn.textContent = '⏸ Pause';
+  pauseBtn.style.color = '';
+  // Restore timer so user can change duration before next run
+  document.getElementById('timer-wrap').style.display = '';
+
+  // Reset progress
+  document.getElementById('progress-bar').style.width = '0%';
+  document.getElementById('char-counter').textContent  = '0 / 0 chars';
+  document.getElementById('speed-display').textContent = '— cps';
+
+  // Reset phase and tabs
+  setPhaseDisplay('idle');
+  if (state.tabs.length) {
+    state.activeTab = state.tabs[0];
+  }
+  renderTabs();
+  renderEditor();
+  updatePreview();
+}
+
+// ══════════════════════════════════════════════════
+//  PROGRESS BAR & COUNTERS
+// ══════════════════════════════════════════════════
+function updateProgressBar(forceComplete) {
+  const pct = forceComplete
+    ? 100
+    : (globalTotal > 0 ? Math.round((globalTyped / globalTotal) * 100) : 0);
+
+  document.getElementById('progress-bar').style.width = pct + '%';
+  document.getElementById('char-counter').textContent  = globalTyped + ' / ' + globalTotal + ' chars';
+}
+
+// ══════════════════════════════════════════════════
+//  PHASE DISPLAY
+// ══════════════════════════════════════════════════
+const PHASE_LABELS = {
+  'idle':          '● IDLE',
+  'typing-html':   '▶ TYPING HTML',
+  'typing-css':    '▶ TYPING CSS',
+  'typing-js':     '▶ TYPING JS',
+  'switch-css':    '⇄ → CSS',
+  'switch-js':     '⇄ → JS',
+  'switch-html':   '⇄ → HTML',
+  'paused':        '⏸ PAUSED',
+  'complete':      '✓ COMPLETE',
+};
+
+const PHASE_COLORS = {
+  'typing-html':   'var(--html-color)',
+  'typing-css':    'var(--css-color)',
+  'typing-js':     'var(--js-color)',
+  'switch-css':    'var(--css-color)',
+  'switch-js':     'var(--js-color)',
+  'switch-html':   'var(--html-color)',
+  'complete':      'var(--accent2)',
+  'paused':        '#ffea7f',
+};
+
+function setPhaseDisplay(phase) {
+  state.phase = phase;
+  const el = document.getElementById('phase-display');
+  el.textContent = PHASE_LABELS[phase] || phase.toUpperCase();
+  el.style.color  = PHASE_COLORS[phase] || 'var(--accent)';
+
+  // Show secondary bar (timer + pause + reset) only while animation is active
+  const secondary = document.getElementById('topbar-secondary');
+  const isActive  = (phase !== 'idle' && phase !== 'complete');
+  secondary.classList.toggle('visible', isActive);
+}
+
+// ══════════════════════════════════════════════════
+//  PASTE MODAL
+// ══════════════════════════════════════════════════
+function openPasteModal() {
+  // Pre-fill modal with current state
+  document.getElementById('modal-title').value = state.title || '';
+  document.getElementById('modal-html').value  = state.codes.html || '';
+  document.getElementById('modal-css').value   = state.codes.css  || '';
+  document.getElementById('modal-js').value    = state.codes.js   || '';
+  document.getElementById('modal-timer').value = document.getElementById('timer-input').value;
+  updateModalSpeedDisplay();
+
+  document.getElementById('paste-modal').classList.add('open');
+
+  // Focus the title field
+  setTimeout(function() {
+    document.getElementById('modal-title').focus();
+    document.getElementById('modal-title').select();
+  }, 120);
+}
+
+function closePasteModal() {
+  document.getElementById('paste-modal').classList.remove('open');
+}
+
+function applyPastedCode() {
+  // Read from modal inputs
+  const newTitle = document.getElementById('modal-title').value.trim() || 'My Page';
+  const newHTML  = document.getElementById('modal-html').value;
+  const newCSS   = document.getElementById('modal-css').value;
+  const newJS    = document.getElementById('modal-js').value;
+  const newTimer = document.getElementById('modal-timer').value;
+
+  state.title       = newTitle;
+  state.codes.html  = newHTML;
+  state.codes.css   = newCSS;
+  state.codes.js    = newJS;
+
+  // Sync timer back to top bar
+  document.getElementById('timer-input').value = newTimer;
+
+  // Auto-manage tabs: enable tabs that have content, disable empty ones (except HTML always shown)
+  const order = ['html', 'css', 'js'];
+  order.forEach(lang => {
+    const hasContent = (state.codes[lang] || '').trim().length > 0;
+    const inTabs     = state.tabs.includes(lang);
+
+    if (hasContent && !inTabs) {
+      // Add it back
+      state.tabs.push(lang);
+    }
+    // We do NOT auto-remove tabs — user controls removal via the X button
+  });
+
+  // Keep tabs in correct order
+  state.tabs.sort((a, b) => order.indexOf(a) - order.indexOf(b));
+
+  // Update prompt label
+  document.getElementById('prompt-label').textContent =
+    newTitle + ' — ' + state.tabs.map(t => t.toUpperCase()).join(' + ');
+
+  closePasteModal();
+  resetAll();
+  renderTabs();
+  renderEditor();
+  updatePreview();
+}
+
+// ══════════════════════════════════════════════════
+//  SPEED CONTROL (in modal)
+// ══════════════════════════════════════════════════
+function adjustSpeed(delta) {
+  state.speedMultiplier = Math.max(0.25, Math.min(8, +(state.speedMultiplier + delta).toFixed(2)));
+  updateModalSpeedDisplay();
+}
+
+function resetSpeed() {
+  state.speedMultiplier = 1.0;
+  updateModalSpeedDisplay();
+}
+
+function updateModalSpeedDisplay() {
+  document.getElementById('modal-speed-display').textContent = state.speedMultiplier + '×';
+}
+
+// ══════════════════════════════════════════════════
+//  SETTINGS PANEL
+// ══════════════════════════════════════════════════
+function toggleSettings() {
+  document.getElementById('settings-panel').classList.toggle('open');
+}
+
+function setLayout(mode) {
+  const container = document.getElementById('split-container');
+  const divider   = document.getElementById('drag-divider');
+
+  if (mode === 'side') {
+    container.classList.add('horizontal');
+    // Set preview pane to 50% width via inline style
+    document.getElementById('preview-pane').style.height = '';
+    divider.style.display = 'none'; // Vertical drag not yet wired for horizontal
+  } else {
+    container.classList.remove('horizontal');
+    document.getElementById('preview-pane').style.height = '40%';
+    divider.style.display = '';
+  }
+}
+
+function setFontSize(size) {
+  document.getElementById('code-display').style.fontSize = size + 'px';
+  renderEditor(); // Re-render so line heights stay consistent
+}
+
+function setEditorFontFamily(family) {
+  // Apply font to both code display and line numbers so they stay aligned
+  document.getElementById('code-display').style.fontFamily = family;
+  document.getElementById('line-numbers').style.fontFamily = family;
+  renderEditor();
+}
+
+// ══════════════════════════════════════════════════
+//  NEW SETTINGS FUNCTIONS
+// ══════════════════════════════════════════════════
+
+function setLineHeight(val) {
+  document.getElementById('code-display').style.lineHeight = val;
+  // Keep line-numbers line-height in sync so numbers align with code lines
+  document.getElementById('line-numbers').style.lineHeight = val;
+  renderEditor();
+}
+
+function setTabWidth(val) {
+  const width = parseInt(val, 10) || 2;
+  state.tabWidthSetting = width;
+  document.getElementById('code-display').style.tabSize = val;
+  document.documentElement.style.setProperty('--tab-size', val);
+  renderEditor(); // FIXED: re-render so space-indented code rescales too, not just literal tabs
+}
+
+function setLetterSpacing(val) {
+  document.getElementById('code-display').style.letterSpacing = val;
+}
+
+function setWordWrap(val) {
+  document.getElementById('code-display').style.whiteSpace = val;
+  document.getElementById('code-display').style.wordBreak     = 'normal';
+  document.getElementById('code-display').style.overflowWrap  = (val === 'pre-wrap') ? 'break-word' : 'normal';
+}
+
+// ── CURSOR STYLES ──
+function setCursorStyle(shape) {
+  const cursor = document.getElementById('live-cursor');
+  const styleEl = document.getElementById('cursor-style-override') || (() => {
+    const el = document.createElement('style');
+    el.id = 'cursor-style-override';
+    document.head.appendChild(el);
+    return el;
+  })();
+
+  if (shape === 'line') {
+    styleEl.textContent = `.typing-cursor { width:2px; height:1em; border-radius:1px; }`;
+  } else if (shape === 'block') {
+    styleEl.textContent = `.typing-cursor { width:0.6em; height:1em; border-radius:1px; opacity:0.7; }`;
+  } else if (shape === 'underscore') {
+    styleEl.textContent = `.typing-cursor { width:0.8em; height:2px; vertical-align:bottom; border-radius:1px; margin-bottom:2px; }`;
+  }
+}
+
+function setCursorGlow(level) {
+  const styleEl = document.getElementById('cursor-glow-override') || (() => {
+    const el = document.createElement('style');
+    el.id = 'cursor-glow-override';
+    document.head.appendChild(el);
+    return el;
+  })();
+
+  if (level === 'strong') {
+    styleEl.textContent = `.typing-cursor { box-shadow: 0 0 8px var(--cursor-color), 0 0 20px var(--cursor-color), 0 0 32px var(--cursor-color); }`;
+  } else if (level === 'soft') {
+    styleEl.textContent = `.typing-cursor { box-shadow: 0 0 4px var(--cursor-color); }`;
+  } else {
+    styleEl.textContent = `.typing-cursor { box-shadow: none; }`;
+  }
+}
+
+// ── TYPING MODE ──
+// Modes: smooth (default even pace), burst (type several chars quickly then tiny pause),
+// human (add slight random variation to timing)
+function setTypingMode(mode) {
+  state.typingMode = mode;
+}
+
+// ── PREVIEW ZOOM ──
+function setPreviewZoom(scale) {
+  const iframe = document.getElementById('preview-iframe');
+  iframe.style.transform = `scale(${scale})`;
+  iframe.style.transformOrigin = 'top left';
+  iframe.style.width = (100 / scale) + '%';
+  iframe.style.height = (100 / scale) + '%';
+}
+
+// ── WATERMARK ──
+// ── WATERMARK: full style control ──
+function setWatermark(mode) {
+  const customRow = document.getElementById('watermark-custom-row');
+  customRow.style.display = (mode === 'custom') ? 'flex' : 'none';
+  const wmEl = document.getElementById('preview-watermark');
+  if (!wmEl) return;
+
+  if (mode === 'none') {
+    wmEl.style.display = 'none';
+    return;
+  }
+
+  wmEl.style.display = '';
+  if (mode === 'username') {
+    wmEl.textContent = document.getElementById('username-input').value || 'Code Motion';
+  } else if (mode === 'custom') {
+    wmEl.textContent = document.getElementById('watermark-text').value || '';
+  }
+  updateWatermarkStyle();
+}
+
+function updateWatermarkText(txt) {
+  const wmEl = document.getElementById('preview-watermark');
+  if (wmEl) wmEl.textContent = txt;
+}
+
+// Reads all watermark style controls and applies them to the watermark element.
+// Called whenever any watermark setting changes.
+// Reads all watermark style controls by their direct IDs and applies them.
+// FIXED: Previous version used fragile nth-child(4) + positional index lookup
+// which broke because a Preview Zoom select came before the watermark selects,
+// offsetting every index by 2. Now each control has its own ID.
+function updateWatermarkStyle() {
+  const wmEl = document.getElementById('preview-watermark');
+  if (!wmEl || wmEl.style.display === 'none') return;
+
+  // Read each control directly by its dedicated ID
+  const fontSize   = document.getElementById('wm-font-size')?.value    || '11px';
+  const fontWeight = document.getElementById('wm-font-weight')?.value  || '700';
+  const opacity    = document.getElementById('wm-opacity')?.value      || '0.50';
+  const position   = document.getElementById('wm-position')?.value     || 'bottom-right';
+  const fontFamily = document.getElementById('wm-font-family')?.value  || "'Syne',sans-serif";
+
+  // Color picker
+  const colorPicker = document.getElementById('watermark-color');
+  const color       = colorPicker ? colorPicker.value : '#58a6ff';
+  const chip        = document.getElementById('watermark-color-chip');
+  if (chip) chip.style.background = color;
+
+  // Apply all styles directly to the watermark element
+  wmEl.style.fontSize      = fontSize;
+  wmEl.style.fontWeight    = fontWeight;
+  wmEl.style.opacity       = opacity;
+  wmEl.style.color         = color;
+  wmEl.style.fontFamily    = fontFamily;
+  wmEl.style.textShadow    = `0 0 10px ${color}99`;
+  wmEl.style.letterSpacing = '0.06em';
+
+  // Reset all position properties first to avoid stale values
+  wmEl.style.top       = '';
+  wmEl.style.bottom    = '';
+  wmEl.style.left      = '';
+  wmEl.style.right     = '';
+  wmEl.style.transform = '';
+
+  // Apply chosen position
+  if (position === 'bottom-right') {
+    wmEl.style.bottom = '10px';
+    wmEl.style.right  = '12px';
+  } else if (position === 'bottom-left') {
+    wmEl.style.bottom = '10px';
+    wmEl.style.left   = '12px';
+  } else if (position === 'top-right') {
+    wmEl.style.top   = '10px';
+    wmEl.style.right = '12px';
+  } else if (position === 'top-left') {
+    wmEl.style.top  = '10px';
+    wmEl.style.left = '12px';
+  } else if (position === 'center') {
+    wmEl.style.top       = '50%';
+    wmEl.style.left      = '50%';
+    wmEl.style.transform = 'translate(-50%, -50%)';
+  }
+}
+
+function syncUsernameToWatermark(val) {
+  const mode = document.getElementById('watermark-mode');
+  if (!mode || mode.value === 'username') {
+    const wmEl = document.getElementById('preview-watermark');
+    if (wmEl) {
+      wmEl.textContent = val;
+      updateWatermarkStyle();
+    }
+  }
+}
+
+// ── SWITCH OVERLAY STYLE ──
+function setSwitchOverlayStyle(style) {
+  const overlay = document.getElementById('switch-overlay');
+  overlay.className = ''; // clear old style class
+  if (style === 'dark') {
+    overlay.style.background = 'rgba(0,0,0,0.72)';
+    overlay.style.backdropFilter = 'blur(2px)';
+  } else if (style === 'slide') {
+    overlay.style.background = 'var(--bg-secondary)';
+    overlay.style.backdropFilter = 'none';
+  } else if (style === 'minimal') {
+    overlay.style.background = 'transparent';
+    overlay.style.backdropFilter = 'none';
+  }
+  state.switchOverlayStyle = style;
+}
+
+// ── PROGRESS BAR STYLE ──
+function setProgressStyle(style) {
+  const bar = document.getElementById('progress-bar');
+  if (style === 'gradient') {
+    bar.style.background = 'linear-gradient(90deg, var(--accent2), var(--accent))';
+    bar.style.animation = 'none';
+  } else if (style === 'solid') {
+    bar.style.background = 'var(--accent)';
+    bar.style.animation = 'none';
+  } else if (style === 'pulse') {
+    bar.style.background = 'var(--accent)';
+    bar.style.animation = 'progressPulse 1s ease-in-out infinite';
+    const styleEl = document.getElementById('progress-pulse-style') || (() => {
+      const el = document.createElement('style');
+      el.id = 'progress-pulse-style';
+      document.head.appendChild(el);
+      return el;
+    })();
+    styleEl.textContent = `@keyframes progressPulse { 0%,100%{opacity:1} 50%{opacity:0.6} }`;
+  }
+}
+
+// ── EDITOR BACKGROUND PATTERN ──
+// FIXED: Was targeting #editor-body but #code-scroll sits on top with its own
+// background color covering the pattern entirely. We now target #code-scroll
+// and use background-color separately from background-image so the pattern
+// shows through the transparent gaps in the gradient/radial patterns.
+function setEditorPattern(pattern) {
+  const styleEl = document.getElementById('editor-pattern-style') || (() => {
+    const el = document.createElement('style');
+    el.id = 'editor-pattern-style';
+    document.head.appendChild(el);
+    return el;
+  })();
+
+  if (pattern === 'none') {
+    // Restore solid background, clear any pattern
+    styleEl.textContent = `
+      #code-scroll {
+        background-color: var(--code-bg);
+        background-image: none;
+      }`;
+  } else if (pattern === 'dots') {
+    styleEl.textContent = `
+      #code-scroll {
+        background-color: var(--code-bg);
+        background-image: radial-gradient(circle, var(--text-dim) 1px, transparent 1px);
+        background-size: 22px 22px;
+      }`;
+  } else if (pattern === 'grid') {
+    styleEl.textContent = `
+      #code-scroll {
+        background-color: var(--code-bg);
+        background-image:
+          linear-gradient(var(--border) 1px, transparent 1px),
+          linear-gradient(90deg, var(--border) 1px, transparent 1px);
+        background-size: 22px 22px;
+      }`;
+  } else if (pattern === 'scanlines') {
+    styleEl.textContent = `
+      #code-scroll {
+        background-color: var(--code-bg);
+        background-image: repeating-linear-gradient(
+          0deg,
+          transparent,
+          transparent 18px,
+          var(--border-light) 19px
+        );
+      }`;
+  }
+}
+
+// ── LINE NUMBERS VISIBILITY ──
+function setLineNumbers(val) {
+  const ln = document.getElementById('line-numbers');
+  ln.style.display = (val === 'hide') ? 'none' : '';
+}
+
+// ── TAB LABEL STYLE ──
+const TAB_LABEL_STYLES = {
+  filename: { html: '001-index.html', css: '001-style.css',  js: '001-script.js'  },
+  short:    { html: 'HTML',           css: 'CSS',            js: 'JavaScript'      },
+  icon:     { html: '⟨/⟩',           css: '{ }',            js: 'JS'              },
+};
+
+function setTabLabelStyle(style) {
+  state.tabLabelStyle = style;
+  const labels = TAB_LABEL_STYLES[style] || TAB_LABEL_STYLES.filename;
+  TAB_META.html.label = labels.html;
+  TAB_META.css.label  = labels.css;
+  TAB_META.js.label   = labels.js;
+  renderTabs();
+}
+
+// ── EXPORT CODE ──
+function exportCurrentCode() {
+  const html = state.codes.html || state.typed.html || '';
+  const css  = state.codes.css  || state.typed.css  || '';
+  const js   = state.codes.js   || state.typed.js   || '';
+  const title = state.title || 'export';
+
+  const fullDoc = [
+    '<!DOCTYPE html>',
+    '<html lang="en">',
+    '<head>',
+    '<meta charset="UTF-8">',
+    '<meta name="viewport" content="width=device-width, initial-scale=1.0">',
+    `<title>${title}</title>`,
+    '<style>',
+    css,
+    '</style>',
+    '</head>',
+    '<body>',
+    html,
+    '<scri' + 'pt>',
+    js,
+    '</' + 'script>',
+    '</body>',
+    '</html>',
+  ].join('\n');
+
+  const blob = new Blob([fullDoc], { type: 'text/html' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = (title.replace(/[^a-z0-9]/gi,'_').toLowerCase() || 'export') + '.html';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('✓ Code exported!');
+}
+
+function setAspectBtn(el, mode) {
+  document.querySelectorAll('.aspect-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+
+  // Sync settings select
+  const sel = document.querySelector('.settings-select');
+  if (sel) sel.value = mode;
+
+  setLayout(mode);
+}
+
+// ══════════════════════════════════════════════════
+//  DRAG DIVIDER (resize preview / editor split)
+// ══════════════════════════════════════════════════
+(function initDragDivider() {
+  const divider   = document.getElementById('drag-divider');
+  const preview   = document.getElementById('preview-pane');
+  const container = document.getElementById('split-container');
+
+  let isDragging  = false;
+  let startY      = 0;
+  let startX      = 0;
+  let startH      = 0;
+  let startW      = 0;
+
+  // FIXED: Freehand drag works in BOTH stack (9:16) and side-by-side (16:9) modes.
+  // In stack mode  → drag vertically  to resize preview height.
+  // In side mode   → drag horizontally to resize preview width.
+  // Constraints are relaxed to just 30px margins so user has full freedom.
+
+  function onMouseDown(e) {
+    isDragging = true;
+    startY     = e.clientY;
+    startX     = e.clientX;
+    startH     = preview.getBoundingClientRect().height;
+    startW     = preview.getBoundingClientRect().width;
+    divider.classList.add('dragging');
+    document.body.style.userSelect = 'none';
+    // Cursor reflects direction
+    document.body.style.cursor = container.classList.contains('horizontal')
+      ? 'col-resize' : 'row-resize';
+  }
+
+  function onMouseMove(e) {
+    if (!isDragging) return;
+    const rect  = container.getBoundingClientRect();
+
+    if (container.classList.contains('horizontal')) {
+      // Side-by-side: resize width
+      const delta = e.clientX - startX;
+      const newW  = Math.max(30, Math.min(rect.width - 30, startW + delta));
+      preview.style.width  = newW + 'px';
+      preview.style.height = '';
+    } else {
+      // Stack: resize height — fully freehand, only 30px margins
+      const delta = e.clientY - startY;
+      const newH  = Math.max(30, Math.min(rect.height - 30, startH + delta));
+      preview.style.height = newH + 'px';
+    }
+  }
+
+  function onMouseUp() {
+    if (!isDragging) return;
+    isDragging = false;
+    divider.classList.remove('dragging');
+    document.body.style.userSelect = '';
+    document.body.style.cursor     = '';
+  }
+
+  // Touch support — freehand on mobile too
+  function onTouchStart(e) {
+    const touch = e.touches[0];
+    isDragging  = true;
+    startY      = touch.clientY;
+    startX      = touch.clientX;
+    startH      = preview.getBoundingClientRect().height;
+    startW      = preview.getBoundingClientRect().width;
+  }
+
+  function onTouchMove(e) {
+    if (!isDragging) return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    const rect  = container.getBoundingClientRect();
+
+    if (container.classList.contains('horizontal')) {
+      const delta = touch.clientX - startX;
+      const newW  = Math.max(30, Math.min(rect.width - 30, startW + delta));
+      preview.style.width  = newW + 'px';
+      preview.style.height = '';
+    } else {
+      const delta = touch.clientY - startY;
+      const newH  = Math.max(30, Math.min(rect.height - 30, startH + delta));
+      preview.style.height = newH + 'px';
+    }
+  }
+
+  function onTouchEnd() {
+    isDragging = false;
+  }
+
+  divider.addEventListener('mousedown',  onMouseDown);
+  document.addEventListener('mousemove', onMouseMove);
+  document.addEventListener('mouseup',   onMouseUp);
+  divider.addEventListener('touchstart', onTouchStart, { passive: true });
+  divider.addEventListener('touchmove',  onTouchMove,  { passive: false });
+  divider.addEventListener('touchend',   onTouchEnd);
+})();
+
+// ══════════════════════════════════════════════════
+//  CARET PRESERVATION — required because every keystroke
+//  rebuilds innerHTML (to reapply syntax highlighting), which
+//  would otherwise reset the caret to position 0 on every key.
+//  These convert between a DOM Selection and a plain character
+//  offset so the caret can be restored after the rebuild.
+// ══════════════════════════════════════════════════
+function getCaretCharOffset(el) {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return null;
+  const range = sel.getRangeAt(0);
+  if (!el.contains(range.startContainer)) return null;
+  const pre = document.createRange();
+  pre.selectNodeContents(el);
+  pre.setEnd(range.endContainer, range.endOffset);
+  // FIXED: strip the zero-width-space caret marker (see insertTextAtCaret)
+  // so this count stays consistent with syncEditorTextOnly()'s stripped
+  // text — otherwise the two disagree by one character whenever a marker
+  // is still present, and the caret drifts on the next debounced rebuild.
+  return pre.toString().replace(/\u200B/g, '').length;
+}
+
+function setCaretCharOffset(el, offset) {
+  if (offset === null || offset === undefined) return;
+  const sel = window.getSelection();
+  const range = document.createRange();
+
+  const textNodes = [];
+  (function collect(node) {
+    for (const child of node.childNodes) {
+      if (child.nodeType === Node.TEXT_NODE) textNodes.push(child);
+      else collect(child);
+    }
+  })(el);
+
+  let remaining = offset;
+  let target = null, targetOffset = 0;
+
+  for (let i = 0; i < textNodes.length; i++) {
+    const len = textNodes[i].textContent.length;
+    if (remaining < len) {
+      target = textNodes[i];
+      targetOffset = remaining;
+      break;
+    }
+    if (remaining === len) {
+      // FIXED: landing exactly at the end of a text node — if another
+      // node follows, prefer ITS start over this node's end. Otherwise,
+      // placing the caret "after" a trailing "\n" (common right after
+      // pressing Enter) gets visually collapsed by the browser to
+      // *before* that newline instead, so the next typed character
+      // lands on the wrong line.
+      if (i + 1 < textNodes.length) {
+        target = textNodes[i + 1];
+        targetOffset = 0;
+      } else {
+        target = textNodes[i];
+        targetOffset = len;
+      }
+      break;
+    }
+    remaining -= len;
+  }
+
+  if (target) {
+    range.setStart(target, targetOffset);
+  } else {
+    range.selectNodeContents(el);
+    range.collapse(false); // fall back to the end
+  }
+  range.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
+// FIXED: used for Tab and Enter instead of execCommand('insertText', ...).
+// Chrome's execCommand still treats "\n" as a paragraph break and wraps
+// lines in <div>/<br> elements rather than inserting a literal newline
+// character — that block structure is what threw off the plain-text-node
+// caret math above and caused typed text to land in the wrong place.
+// Inserting a real Text node via Range keeps everything as flat text,
+// consistent with how the highlighted re-render represents code.
+function insertTextAtCaret(text) {
+  const sel = window.getSelection();
+  if (!sel.rangeCount) return;
+  const range = sel.getRangeAt(0);
+  range.deleteContents();
+
+  // FIXED: setStartAfter(node) — and even a fresh EMPTY text node placed
+  // right after it — both left the caret ambiguous once the newline was
+  // the last thing in the editor: Chrome silently continues typing
+  // BEFORE the newline instead of after it (it collapses/ignores an
+  // empty text node the moment another keystroke arrives). Concretely:
+  // type "function foo() {", press Enter, type "  return 1;" — the
+  // second line landed BEFORE the newline instead of after it, silently
+  // merging the two lines. A zero-width space is a real (non-empty)
+  // character Chrome can't discard, so the caret has an unambiguous
+  // home right after the newline. It's stripped back out in
+  // syncEditorTextOnly() before anything reaches state, so it never
+  // appears in the actual code, export, or preview.
+  const node = document.createTextNode(text + '\u200B');
+  range.insertNode(node);
+  range.setStart(node, text.length);
+  range.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
+// ══════════════════════════════════════════════════
+//  EDITOR INTERACTION (when idle: user can edit)
+// ══════════════════════════════════════════════════
+let editorRenderTimer = null;
+
+function scheduleEditorRender(delay) {
+  // FIXED: this used to be a full rebuild fired via setTimeout(fn, 0) after
+  // EVERY keystroke — see syncEditorToState below for why that raced and
+  // dropped characters at real typing speed. Debouncing it here means the
+  // expensive rebuild only runs once the user actually pauses.
+  clearTimeout(editorRenderTimer);
+  editorRenderTimer = setTimeout(syncEditorToState, delay === undefined ? 220 : delay);
+}
+
+// FIXED: an empty editor's only DOM content is the idle blinking-cursor
+// placeholder span (appended by renderEditor when idle). With nothing
+// else to land in, the browser puts the caret INSIDE that span when you
+// click in, so the first characters you type get trapped inside a
+// cursor-indicator element instead of becoming plain code text. Clearing
+// it out on focus (only when there's no real content yet, so an existing
+// caret position inside real code is never disturbed) gives typing a
+// clean, correctly-structured home from the very first keystroke.
+function onEditorFocus() {
+  const lang = state.activeTab;
+  if (!(getEditorCode(lang) || '').length) {
+    renderEditor();
+  }
+}
+
+function onEditorKeyDown(e) {
+  // Block editing during typing animation
+  if (state.isTyping) {
+    e.preventDefault();
+    return;
+  }
+
+  // FIXED: Tab previously just shifted browser focus off the editor
+  // (default Tab behavior) instead of indenting — unusable for anyone
+  // actually hand-typing code. Insert spaces at the caret instead.
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const width = (state.tabWidthSetting || 2);
+    insertTextAtCaret(' '.repeat(width));
+    syncEditorTextOnly();  // immediate + cheap: never lost even if the rebuild below is still pending
+    updatePreview();
+    scheduleEditorRender();
+    return;
+  }
+
+  // FIXED: the browser's default Enter behavior in a contenteditable wraps
+  // each line in its own <div>/<br> rather than inserting a plain "\n"
+  // character. That block structure threw off the plain-text-node caret
+  // math below, which is what caused typed text to land in the wrong
+  // place (and look garbled/reversed) after any Enter press. Inserting a
+  // literal newline character keeps the content a flat run of text.
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    insertTextAtCaret('\n');
+    syncEditorTextOnly();
+    updatePreview();
+    scheduleEditorRender();
+    return;
+  }
+
+  // Regular characters: let the browser insert them natively — the
+  // 'input' event (onEditorInput, bound in HTML) picks up the sync.
+}
+
+// FIXED: was previously inlined inside syncEditorToState, which meant
+// updating state.codes required a full highlight rebuild every time.
+// Split out so the 'input' handler can update state instantly on every
+// keystroke without paying for (or racing) a DOM rebuild.
+function syncEditorTextOnly() {
+  const lang    = state.activeTab;
+  const display = document.getElementById('code-display');
+  // FIXED: strip the zero-width-space caret marker insertTextAtCaret()
+  // leaves behind — it must never appear in the real code, export, or preview.
+  const text    = (display.innerText || '').replace(/\u200B/g, '');
+
+  // For HTML: strip the boilerplate prefix and suffix if present
+  if (lang === 'html') {
+    const boilerTop   = BOILERPLATE(state.title);
+    const boilerClose = BOILERPLATE_CLOSE;
+    let body = text;
+    if (body.startsWith(boilerTop))   body = body.slice(boilerTop.length);
+    if (body.endsWith(boilerClose))   body = body.slice(0, body.length - boilerClose.length);
+    state.codes.html = body;
+  } else {
+    state.codes[lang] = text;
+  }
+  return text;
+}
+
+// Fires on every native text change in the editor (typed characters,
+// deletions, native browser edits). Cheap and synchronous — this is what
+// guarantees state.codes never loses a character, no matter how fast
+// someone types through a multi-hour recording.
+function onEditorInput() {
+  if (state.isTyping) return; // animation owns the content during playback
+  syncEditorTextOnly();
+  updatePreview();
+  scheduleEditorRender();
+}
+
+// The expensive path: rebuild syntax highlighting and restore the caret.
+// Debounced by scheduleEditorRender() so it only runs once typing pauses,
+// instead of racing itself on every keystroke.
+function syncEditorToState() {
+  const lang    = state.activeTab;
+  const display = document.getElementById('code-display');
+  const offset  = getCaretCharOffset(display); // FIXED: capture before rebuilding
+
+  const rawCode = syncEditorTextOnly();
+
+  // FIXED: renderEditor() rescales indentation to match the Tab Width
+  // setting (normalizeIndentForDisplay), which can change how many
+  // characters precede the caret. Recompute the restore offset through
+  // the same rescale (using the same detected indent unit renderEditor
+  // is about to use) so the caret lands in the same visual spot instead
+  // of drifting whenever a line's indent differs from the Tab Width
+  // setting — which is constantly true while actively hand-typing.
+  const unit = detectIndentUnit(rawCode.split('\n'));
+  let restoreOffset = offset;
+  if (offset !== null) {
+    restoreOffset = normalizeIndentForDisplay(rawCode.slice(0, offset), unit).length;
+  }
+
+  renderEditor(unit);
+  if (restoreOffset !== null && document.activeElement === display) {
+    setCaretCharOffset(display, restoreOffset); // FIXED: restore, instead of leaving it at 0
+  }
+  updatePreview();
+}
+
+function onEditorPaste(e) {
+  // Block pasting during animation
+  if (state.isTyping) {
+    e.preventDefault();
+    return;
+  }
+  // Plain text paste only
+  e.preventDefault();
+  const text = e.clipboardData ? e.clipboardData.getData('text/plain') : '';
+  insertTextAtCaret(text);
+  syncEditorTextOnly();
+  updatePreview();
+  scheduleEditorRender(0); // paste is a deliberate one-shot action — rebuild right away
+}
+
+
+// ══════════════════════════════════════════════════
+//  LOGO UPLOAD
+// ══════════════════════════════════════════════════
+document.getElementById('logo-upload').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    const img  = document.getElementById('logo-img');
+    const text = document.getElementById('logo-text');
+    img.src           = ev.target.result;
+    img.style.display = 'block';
+    text.style.display = 'none';
+  };
+  reader.readAsDataURL(file);
+});
+
+// ══════════════════════════════════════════════════
+//  KEYBOARD SHORTCUTS
+// ══════════════════════════════════════════════════
+document.addEventListener('keydown', function(e) {
+  const activeEl  = document.activeElement;
+  const tag       = activeEl ? activeEl.tagName : '';
+  const isEditing = (
+    tag === 'INPUT' ||
+    tag === 'TEXTAREA' ||
+    tag === 'SELECT' ||
+    activeEl.id === 'code-display'
+  );
+
+  // Escape: close panels
+  if (e.key === 'Escape') {
+    closePasteModal();
+    document.getElementById('settings-panel').classList.remove('open');
+    return;
+  }
+
+  // Don't intercept when user is typing in an input
+  if (isEditing) return;
+
+  // Space: play / pause
+  if (e.code === 'Space') {
+    e.preventDefault();
+    if (!state.isTyping && !state.isPaused && !state.complete) {
+      startTyping();
+    } else if (state.isTyping || state.isPaused) {
+      togglePause();
+    }
+    return;
+  }
+
+  // R: reset
+  if (e.key === 'r' || e.key === 'R') {
+    e.preventDefault();
+    resetAll();
+    return;
+  }
+
+  // S: settings
+  if (e.key === 's' || e.key === 'S') {
+    e.preventDefault();
+    toggleSettings();
+    return;
+  }
+
+  // V: toggle video recording
+  if (e.key === 'v' || e.key === 'V') {
+    e.preventDefault();
+    toggleRecording();
+    return;
+  }
+
+  // M: mute / unmute sound
+  if (e.key === 'm' || e.key === 'M') {
+    e.preventDefault();
+    quickToggleSound();
+    return;
+  }
+
+  // Ctrl+K or Cmd+K: open paste modal
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault();
+    openPasteModal();
+    return;
+  }
+
+  // Arrow Right: speed up (reduce ms per char by 10%)
+  if (e.key === 'ArrowRight') {
+    msPerChar = Math.max(8, msPerChar * 0.9);
+    const cps = Math.round(1000 / msPerChar);
+    document.getElementById('speed-display').textContent = cps + ' cps';
+    showToast('Speed: ' + cps + ' cps ▶');
+    return;
+  }
+
+  // Arrow Left: slow down (increase ms per char by 10%)
+  if (e.key === 'ArrowLeft') {
+    msPerChar = Math.min(500, msPerChar * 1.1);
+    const cps = Math.round(1000 / msPerChar);
+    document.getElementById('speed-display').textContent = cps + ' cps';
+    showToast('Speed: ' + cps + ' cps ◀');
+    return;
+  }
+});
+
+// ══════════════════════════════════════════════════
+//  HOTKEY TOAST
+// ══════════════════════════════════════════════════
+let toastTimer = null;
+function showToast(msg) {
+  const toast    = document.getElementById('hotkey-toast');
+  toast.textContent = msg;
+  toast.classList.add('show');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(function() {
+    toast.classList.remove('show');
+  }, 1800);
+}
+
+// ══════════════════════════════════════════════════
+//  INIT — Load demo code so the app is not empty
+// ══════════════════════════════════════════════════
+function init() {
+  state.title      = 'Hello World';
+  state.codes.html = [
+    '<div class="hero">',
+    '  <div class="hero-inner">',
+    '    <h1 id="main-title">Hello, World!</h1>',
+    '    <p class="subtitle">Built with Cybliz CYL — Code Typer</p>',
+    '    <button class="cta-btn" onclick="celebrate()">Click me ✨</button>',
+    '    <div id="msg" class="msg"></div>',
+    '  </div>',
+    '</div>',
+  ].join('\n');
+
+  state.codes.css = [
+    '* { box-sizing: border-box; margin: 0; padding: 0; }',
+    '',
+    'body {',
+    '  font-family: "Segoe UI", sans-serif;',
+    '  background: linear-gradient(135deg, #0d1117 0%, #1a1a2e 100%);',
+    '  min-height: 100vh;',
+    '  display: flex;',
+    '  align-items: center;',
+    '  justify-content: center;',
+    '}',
+    '',
+    '.hero {',
+    '  text-align: center;',
+    '  padding: 48px 32px;',
+    '}',
+    '',
+    'h1 {',
+    '  font-size: 3rem;',
+    '  font-weight: 800;',
+    '  background: linear-gradient(90deg, #58a6ff, #3fb950);',
+    '  -webkit-background-clip: text;',
+    '  -webkit-text-fill-color: transparent;',
+    '  margin-bottom: 14px;',
+    '}',
+    '',
+    '.subtitle {',
+    '  color: #8b949e;',
+    '  font-size: 1rem;',
+    '  margin-bottom: 28px;',
+    '}',
+    '',
+    '.cta-btn {',
+    '  padding: 12px 32px;',
+    '  background: #58a6ff;',
+    '  color: #0d1117;',
+    '  border: none;',
+    '  border-radius: 8px;',
+    '  font-size: 1rem;',
+    '  font-weight: 700;',
+    '  cursor: pointer;',
+    '  transition: transform 0.15s, box-shadow 0.15s;',
+    '}',
+    '',
+    '.cta-btn:hover {',
+    '  transform: translateY(-2px);',
+    '  box-shadow: 0 6px 20px rgba(88,166,255,0.35);',
+    '}',
+    '',
+    '.msg {',
+    '  margin-top: 20px;',
+    '  font-size: 0.95rem;',
+    '  color: #3fb950;',
+    '  min-height: 24px;',
+    '}',
+  ].join('\n');
+
+  state.codes.js = [
+    'var messages = [',
+    '  "Welcome to Cybliz CYL! 🎉",',
+    '  "Your code typer is ready! 🚀",',
+    '  "Start. Pause. Replay. 🎬",',
+    '  "Code like a pro! 💻",',
+    '];',
+    '',
+    'var msgIndex = 0;',
+    '',
+    'function celebrate() {',
+    '  var msgEl = document.getElementById("msg");',
+    '  msgEl.textContent = messages[msgIndex % messages.length];',
+    '  msgIndex++;',
+    '',
+    '  var title = document.getElementById("main-title");',
+    '  title.style.transform = "scale(1.05)";',
+    '  setTimeout(function() {',
+    '    title.style.transform = "scale(1)";',
+    '  }, 200);',
+    '}',
+    '',
+    'console.log("Cybliz CYL - Code Typer ready.");',
+  ].join('\n');
+
+  // Set prompt label
+  document.getElementById('prompt-label').textContent = 'Hello World — HTML + CSS + JS';
+  document.getElementById('modal-title').value        = state.title;
+
+  // Initial render
+  renderTabs();
+  renderEditor();
+  updatePreview();
+}
+
+init();
+
+// ══════════════════════════════════════════════════════════════
+//  KEYBOARD SOUND ENGINE — Web Audio API
+//  100% synthetic — no audio files, no extra download size.
+//  Four presets: Mechanical, Soft, Typewriter, Cherry MX
+// ══════════════════════════════════════════════════════════════
+let audioCtx = null;
+
+function getAudioCtx() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  // Browsers suspend AudioContext until user interaction — resume it
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+  return audioCtx;
+}
+
+function playKeyClick(char) {
+  const soundEl = document.getElementById('sound-enabled');
+  if (!soundEl || soundEl.value === 'off') return;
+
+  const typeEl   = document.getElementById('sound-type');
+  const volEl    = document.getElementById('sound-volume');
+  const soundType = typeEl ? typeEl.value : 'mechanical';
+  const volume    = volEl  ? parseFloat(volEl.value) : 0.25;
+
+  const ctx       = getAudioCtx();
+  const isNewline = (char === '\n');
+
+  if      (soundType === 'mechanical') { playMechanical(ctx, volume, isNewline); }
+  else if (soundType === 'soft')       { playSoft(ctx, volume, isNewline);       }
+  else if (soundType === 'typewriter') { playTypewriter(ctx, volume, isNewline); }
+  else if (soundType === 'cherry')     { playCherry(ctx, volume, isNewline);     }
+}
+
+// ── Mechanical — sharp high-frequency click with noise burst ──
+function playMechanical(ctx, vol, isNewline) {
+  const now  = ctx.currentTime;
+  const freq = isNewline ? 1400 : 800 + Math.random() * 500;
+
+  // Primary click oscillator
+  const osc  = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.frequency.setValueAtTime(freq, now);
+  osc.frequency.exponentialRampToValueAtTime(180, now + 0.045);
+  gain.gain.setValueAtTime(vol, now);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.05);
+  osc.start(now);
+  osc.stop(now + 0.06);
+
+  // Tactile noise burst
+  const bufLen = Math.floor(ctx.sampleRate * 0.03);
+  const nBuf   = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+  const nData  = nBuf.getChannelData(0);
+  for (let i = 0; i < bufLen; i++) nData[i] = (Math.random() * 2 - 1);
+  const nSrc   = ctx.createBufferSource();
+  const nGain  = ctx.createGain();
+  const nFilt  = ctx.createBiquadFilter();
+  nSrc.buffer  = nBuf;
+  nFilt.type   = 'bandpass';
+  nFilt.frequency.value = 3500;
+  nFilt.Q.value = 1.5;
+  nSrc.connect(nFilt);
+  nFilt.connect(nGain);
+  nGain.connect(ctx.destination);
+  nGain.gain.setValueAtTime(vol * 0.35, now);
+  nGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.03);
+  nSrc.start(now);
+  nSrc.stop(now + 0.04);
+}
+
+// ── Soft — muffled membrane thud ──
+function playSoft(ctx, vol, isNewline) {
+  const now  = ctx.currentTime;
+  const osc  = ctx.createOscillator();
+  const gain = ctx.createGain();
+  const filt = ctx.createBiquadFilter();
+  osc.connect(filt);
+  filt.connect(gain);
+  gain.connect(ctx.destination);
+  filt.type = 'lowpass';
+  filt.frequency.value = 700;
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(isNewline ? 280 : 180 + Math.random() * 80, now);
+  osc.frequency.exponentialRampToValueAtTime(60, now + 0.1);
+  gain.gain.setValueAtTime(vol * 0.8, now);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+  osc.start(now);
+  osc.stop(now + 0.13);
+}
+
+// ── Typewriter — sharp clack with metallic ring overtone ──
+function playTypewriter(ctx, vol, isNewline) {
+  const now = ctx.currentTime;
+
+  // Sharp clack
+  const o1 = ctx.createOscillator();
+  const g1 = ctx.createGain();
+  o1.connect(g1); g1.connect(ctx.destination);
+  o1.type = 'square';
+  o1.frequency.setValueAtTime(isNewline ? 700 : 420 + Math.random() * 200, now);
+  o1.frequency.exponentialRampToValueAtTime(90, now + 0.07);
+  g1.gain.setValueAtTime(vol * 0.65, now);
+  g1.gain.exponentialRampToValueAtTime(0.0001, now + 0.08);
+  o1.start(now); o1.stop(now + 0.09);
+
+  // Metal ring overtone
+  const o2 = ctx.createOscillator();
+  const g2 = ctx.createGain();
+  o2.connect(g2); g2.connect(ctx.destination);
+  o2.type = 'sine';
+  o2.frequency.setValueAtTime(2200 + Math.random() * 600, now);
+  o2.frequency.exponentialRampToValueAtTime(900, now + 0.14);
+  g2.gain.setValueAtTime(vol * 0.18, now);
+  g2.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+  o2.start(now); o2.stop(now + 0.17);
+}
+
+// ── Cherry MX — two-phase click (down-stroke + up-stroke) ──
+function playCherry(ctx, vol, isNewline) {
+  const now = ctx.currentTime;
+
+  function phase(time, freq, dur, v) {
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    const f = ctx.createBiquadFilter();
+    o.connect(f); f.connect(g); g.connect(ctx.destination);
+    f.type = 'bandpass';
+    f.frequency.value = freq;
+    f.Q.value = 2.5;
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(freq, time);
+    o.frequency.exponentialRampToValueAtTime(freq * 0.28, time + dur);
+    g.gain.setValueAtTime(v, time);
+    g.gain.exponentialRampToValueAtTime(0.0001, time + dur);
+    o.start(time); o.stop(time + dur + 0.01);
+  }
+
+  const baseFreq = isNewline ? 1500 : 1000 + Math.random() * 350;
+  phase(now,          baseFreq,       0.038, vol);       // down-stroke
+  phase(now + 0.060,  baseFreq * 0.9, 0.028, vol * 0.55); // up-stroke
+}
+
+// Quick toggle from bottom bar icon
+function updateSoundStatus() {
+  const el  = document.getElementById('sound-status');
+  const val = document.getElementById('sound-enabled');
+  if (!el || !val) return;
+  if (val.value === 'on') {
+    el.textContent = '🔊';
+    el.classList.add('on');
+  } else {
+    el.textContent = '🔇';
+    el.classList.remove('on');
+  }
+}
+
+function quickToggleSound() {
+  const sel = document.getElementById('sound-enabled');
+  if (!sel) return;
+  sel.value = sel.value === 'on' ? 'off' : 'on';
+  updateSoundStatus();
+  showToast(sel.value === 'on' ? '🔊 Sound ON' : '🔇 Sound OFF');
+}
+
+// ══════════════════════════════════════════════════════════════
+//  VIDEO RECORDING ENGINE — getDisplayMedia + MediaRecorder
+//  Captures the full browser tab at up to 1920×1080 (1080p).
+//  Saves as .webm (VP9). Works in Chrome, Edge, Firefox.
+// ══════════════════════════════════════════════════════════════
+let mediaRecorder        = null;
+let recordedChunks       = [];
+let isRecording          = false;
+let recordingStartTime   = null;
+let recordingTimerHandle = null;
+
+async function startRecording() {
+  if (isRecording) {
+    showToast('Already recording — click ■ Stop to finish.');
+    return;
+  }
+
+  try {
+    // FIXED: preferCurrentTab=true tells Chrome to default to THIS tab in the picker,
+    // skipping the need to manually select it. displaySurface='browser' further hints
+    // that we want a browser tab, not a window or full screen.
+    // Note: if the browser still shows a picker, choose "Tab" → "Code Motion".
+    const stream = await navigator.mediaDevices.getDisplayMedia({
+      preferCurrentTab: true,
+      video: {
+        displaySurface: 'browser',
+        width:          { ideal: 1920, max: 1920 },
+        height:         { ideal: 1080, max: 1080 },
+        frameRate:      { ideal: 30, max: 60 },
+      },
+      audio: false,
+    });
+
+    recordedChunks = [];
+
+    // FIXED: 15Mbps bitrate for crisp 1080p. VP9 is the highest quality available
+    // in WebM. Chunk interval reduced from 2000ms to 100ms so data is flushed
+    // frequently — this is what was causing the choppiness/jitter.
+    const mimeType = [
+      'video/webm;codecs=vp9',
+      'video/webm;codecs=vp8',
+      'video/webm',
+    ].find(m => MediaRecorder.isTypeSupported(m)) || 'video/webm';
+
+    mediaRecorder = new MediaRecorder(stream, {
+      mimeType,
+      videoBitsPerSecond: 15000000, // 15 Mbps — crisp 1080p
+    });
+
+    mediaRecorder.ondataavailable = function(e) {
+      if (e.data && e.data.size > 0) {
+        recordedChunks.push(e.data);
+      }
+    };
+
+    mediaRecorder.onstop = function() {
+      const blob     = new Blob(recordedChunks, { type: 'video/webm' });
+      const url      = URL.createObjectURL(blob);
+      const filename = 'code-motion-' + new Date().toISOString().slice(0,19).replace(/[:\-T]/g,'-') + '.webm';
+      const anchor   = document.createElement('a');
+      anchor.href     = url;
+      anchor.download = filename;
+      anchor.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      recordedChunks = [];
+      stream.getTracks().forEach(t => t.stop());
+      isRecording = false;
+      clearInterval(recordingTimerHandle);
+      recordingTimerHandle = null;
+      updateRecordingUI();
+      showToast('✓ Saved: ' + filename);
+    };
+
+    // FIXED: 100ms chunk interval — was 2000ms which caused choppy output.
+    // Smaller chunks = smoother recording, more frequent buffer flushes.
+    mediaRecorder.start(100);
+    isRecording        = true;
+    recordingStartTime = Date.now();
+
+    // Elapsed timer display
+    recordingTimerHandle = setInterval(function() {
+      const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
+      const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
+      const ss = String(elapsed % 60).padStart(2, '0');
+      const el = document.getElementById('rec-elapsed');
+      if (el) el.textContent = mm + ':' + ss;
+    }, 1000);
+
+    updateRecordingUI();
+    showToast('🔴 Recording this tab — 1080p VP9');
+
+  } catch (err) {
+    if (err.name === 'NotAllowedError') {
+      showToast('Recording cancelled');
+    } else {
+      showToast('⚠ Recording error: ' + err.message);
+    }
+    isRecording = false;
+    updateRecordingUI();
+  }
+}
+
+function stopRecording() {
+  if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+    showToast('No active recording to stop');
+    return;
+  }
+  mediaRecorder.stop();
+  // onstop fires automatically and handles download + cleanup
+}
+
+function toggleRecording() {
+  if (isRecording) {
+    stopRecording();
+  } else {
+    startRecording();
+  }
+}
+
+function updateRecordingUI() {
+  const btn       = document.getElementById('btn-record');
+  const btnLabel  = document.getElementById('btn-record-label');
+  const indicator = document.getElementById('rec-indicator');
+
+  if (isRecording) {
+    if (btn)       { btn.classList.add('recording'); }
+    if (btnLabel)  { btnLabel.textContent = '■ Stop'; }
+    if (indicator) { indicator.classList.add('visible'); }
+  } else {
+    if (btn)       { btn.classList.remove('recording'); }
+    if (btnLabel)  { btnLabel.textContent = '⏺ Rec'; }
+    if (indicator) { indicator.classList.remove('visible'); }
+    const el = document.getElementById('rec-elapsed');
+    if (el) el.textContent = '00:00';
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  COUNTDOWN SYSTEM
+//  Shows 3…2…1 over the screen before animation starts.
+//  Configurable in Settings → Video Recording → Countdown.
+// ══════════════════════════════════════════════════════════════
+function showCountdown(seconds, callback) {
+  if (!seconds || seconds <= 0) {
+    callback();
+    return;
+  }
+
+  const overlay = document.getElementById('countdown-overlay');
+  let numEl = document.getElementById('countdown-number');
+  overlay.classList.add('show');
+
+  let remaining = seconds;
+
+  function tick() {
+    try {
+      numEl.textContent = remaining;
+      // Re-trigger animation by cloning the element
+      const clone = numEl.cloneNode(true);
+      numEl.parentNode.replaceChild(clone, numEl);
+      // FIXED: keep numEl pointed at the live (just-inserted) node.
+      // The old code left numEl referencing the now-detached original,
+      // so the *next* tick's replaceChild ran on a null parentNode and
+      // threw — silently killing the countdown before the overlay was
+      // ever removed or the callback (record/start) ever ran.
+      numEl = clone;
+
+      if (remaining <= 0) {
+        overlay.classList.remove('show');
+        callback();
+        return;
+      }
+      remaining--;
+      setTimeout(tick, 1000);
+    } catch (err) {
+      // SAFETY NET: whatever goes wrong here, never leave the blur
+      // overlay stuck on screen and the app un-clickable again.
+      console.error('Countdown error — recovering:', err);
+      overlay.classList.remove('show');
+      callback();
+    }
+  }
+
+  tick();
+}
+
+// ══════════════════════════════════════════════════════════════
+//  REVISED handleStartClick — wraps startTyping with:
+//  - Optional countdown
+//  - Optional auto-start recording
+// ══════════════════════════════════════════════════════════════
+function handleStartClick() {
+  const hasAnyCode = state.tabs.some(lang => (state.codes[lang] || '').trim().length > 0);
+  if (!hasAnyCode) {
+    openPasteModal();
+    return;
+  }
+
+  const countdownSecs = parseInt(document.getElementById('rec-countdown')?.value || '0');
+  const autoStart     = document.getElementById('rec-auto-start')?.value === 'yes';
+
+  showCountdown(countdownSecs, function() {
+    if (autoStart && !isRecording) {
+      // Fire recording then start animation after a short delay
+      // so MediaRecorder is initialised before the first frame
+      startRecording();
+      setTimeout(startTyping, 700);
+    } else {
+      startTyping();
+    }
+  });
+}
+</script>
+</body>
+</html>
